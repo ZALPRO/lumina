@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { encodeQoi, decodeQoi } from '../src/formats/qoi.js';
@@ -8,6 +9,10 @@ import { encodePng, decodePng } from '../src/formats/png.js';
 import { encodeBmp, decodeBmp } from '../src/formats/bmp.js';
 
 const REF = path.join(path.dirname(fileURLToPath(import.meta.url)), 'ref');
+// دودویی مرجع QOI فقط روی لینوکس ساخته می‌شود (CI آن را کامپایل می‌کند)؛ روی
+// سکوهای دیگر این دو تست interop رد می‌شوند و بقیهٔ تست‌ها اجرا می‌شوند.
+const REF_CLI = path.join(REF, 'qoi_ref_cli');
+const hasRefCli = existsSync(REF_CLI);
 
 // ---------- تصویر تست قطعی (پوشش run/diff/luma/index/rgba/rgb) ----------
 function makeTestImage(w, h) {
@@ -38,7 +43,7 @@ function assertPixelsEqual(a, b, w, h, label) {
 }
 
 // ---------- QOI: interop با مرجع رسمی C ----------
-test('QOI: encode من → decode مرجع C (دوطرفه)', async () => {
+test('QOI: encode من → decode مرجع C (دوطرفه)', { skip: hasRefCli ? false : 'qoi_ref_cli ساخته نشده (نیاز به cc روی لینوکس)' }, async () => {
   const w = 79, h = 57;
   const img = makeTestImage(w, h);
   const encoded = encodeQoi({ width: w, height: h, data: img });
@@ -48,7 +53,7 @@ test('QOI: encode من → decode مرجع C (دوطرفه)', async () => {
   const fs = await import('node:fs');
 
   fs.writeFileSync(qoiFile, Buffer.from(encoded));
-  execFileSync(path.join(REF, 'qoi_ref_cli'), ['decode', qoiFile, rawFile]);
+  execFileSync(REF_CLI, ['decode', qoiFile, rawFile]);
 
   const raw = fs.readFileSync(rawFile);
   const rw = raw.readUInt32BE(0), rh = raw.readUInt32BE(4);
@@ -57,7 +62,7 @@ test('QOI: encode من → decode مرجع C (دوطرفه)', async () => {
   assertPixelsEqual(img, refPixels, w, h, 'QOI enc→ref dec');
 });
 
-test('QOI: encode مرجع C → decode من', async () => {
+test('QOI: encode مرجع C → decode من', { skip: hasRefCli ? false : 'qoi_ref_cli ساخته نشده (نیاز به cc روی لینوکس)' }, async () => {
   const w = 80, h = 60;
   const img = makeTestImage(w, h);
   const fs = await import('node:fs');
@@ -65,7 +70,7 @@ test('QOI: encode مرجع C → decode من', async () => {
   fs.writeFileSync(pixFile, Buffer.from(img));
 
   const qoiFile = path.join(REF, 'ref_encoded.qoi');
-  execFileSync(path.join(REF, 'qoi_ref_cli'), ['encode', pixFile, qoiFile, String(w), String(h), '4']);
+  execFileSync(REF_CLI, ['encode', pixFile, qoiFile, String(w), String(h), '4']);
 
   const encodedByRef = new Uint8Array(fs.readFileSync(qoiFile));
   const mine = decodeQoi(encodedByRef);
