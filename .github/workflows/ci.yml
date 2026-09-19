@@ -18,6 +18,8 @@ jobs:
   test:
     name: Test (${{ matrix.os }} / Node ${{ matrix.node }})
     runs-on: ${{ matrix.os }}
+    # سقف زمان: یک تست معلق نباید اجراکننده را ساعت‌ها اشغال کند.
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -64,6 +66,8 @@ jobs:
   corpus:
     name: PSD corpus vs. independent reference
     runs-on: ubuntu-latest
+    # کل مجموعهٔ PSD دانلودی + مقایسهٔ پیکسلی: بیش از این نباید طول بکشد.
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
 

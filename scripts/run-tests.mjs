@@ -41,7 +41,11 @@ if (!files.length) {
 const list = files.map((f) => path.join('test', f));
 console.log(`running ${list.length} test file(s): ${list.join(', ')}\n`);
 
-const child = spawn(process.execPath, ['--test', ...list], { cwd: ROOT, stdio: 'inherit' });
+// --test-timeout: هیچ تستی نباید اجراکننده را برای همیشه معلق کند (پیش‌فرض: بی‌نهایت).
+const child = spawn(process.execPath, ['--test', '--test-timeout=120000', ...list], {
+  cwd: ROOT,
+  stdio: 'inherit',
+});
 child.on('exit', (code, signal) => {
   if (signal) process.kill(process.pid, signal);
   else process.exit(code ?? 1);

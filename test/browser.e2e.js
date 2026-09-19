@@ -21,12 +21,41 @@ async function portOpen(url) {
   }
 }
 
+// بستن سرور استاتیک به‌صورت cross-platform.
+// روی POSIX گروه فرایند را با PID منفی می‌کشیم؛ روی ویندوز PID منفی معنی ندارد و
+// اگر سرور زنده بماند، هندل فرزند، اجراکنندهٔ تست را برای همیشه باز نگه می‌دارد
+// (همین باعث هنگ شغل ویندوز در CI شده بود).
+function stopServer(proc) {
+  return new Promise((resolve) => {
+    if (!proc || proc.exitCode !== null || proc.signalCode !== null) return resolve();
+    const finish = () => { clearTimeout(timer); resolve(); };
+    const timer = setTimeout(() => { try { proc.kill('SIGKILL'); } catch { /* ignore */ } resolve(); }, 3000);
+    proc.once('exit', finish);
+    try {
+      if (process.platform === 'win32') {
+        const killer = spawn('taskkill', ['/pid', String(proc.pid), '/T', '/F'], { stdio: 'ignore' });
+        killer.on('error', () => { try { proc.kill(); } catch { /* ignore */ } });
+      } else {
+        process.kill(-proc.pid, 'SIGTERM');
+      }
+    } catch {
+      try { proc.kill('SIGKILL'); } catch { /* ignore */ }
+    }
+  });
+}
+
 test.before(async () => {
   if (!(await portOpen(URL))) {
     const servePath = join(dirname(fileURLToPath(import.meta.url)), '..', 'scripts', 'serve.js');
-    serverProc = spawn(process.execPath, [servePath], { stdio: 'ignore', detached: true });
+    serverProc = spawn(process.execPath, [servePath], {
+      stdio: 'ignore',
+      detached: process.platform !== 'win32',
+    });
+    // سرور نباید فرایند تست را زنده نگه دارد؛ پاک‌سازی هم صریح انجام می‌شود.
+    serverProc.unref();
     // صبر تا سرور آماده شود
     for (let i = 0; i < 40 && !(await portOpen(URL)); i++) await new Promise((r) => setTimeout(r, 250));
+    if (!(await portOpen(URL))) throw new Error(`static server did not start on ${URL}`);
   }
   browser = await puppeteer.launch({ headless: 'shell', args: ['--no-sandbox', '--disable-gpu'] });
   page = await browser.newPage();
@@ -40,7 +69,7 @@ test.before(async () => {
 });
 test.after(async () => {
   if (browser) await browser.close();
-  if (serverProc) { try { process.kill(-serverProc.pid, 'SIGTERM'); } catch { /* ignore */ } }
+  await stopServer(serverProc);
 });
 
 test('UI: layout مدرن لود شد (rail ابزار + پنل راست + نوار وضعیت)', async () => {

@@ -16,6 +16,8 @@ jobs:
   build:
     name: Build (${{ matrix.name }})
     runs-on: ${{ matrix.os }}
+    # سقف زمان: بسته‌بندی + آپلود دارایی‌ها هرگز نباید معلق بماند.
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -96,6 +98,7 @@ jobs:
     name: Publish GitHub Release
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
