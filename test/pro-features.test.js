@@ -900,3 +900,111 @@ test('رگرسیون: PSD تخت CMYK با تفسیر معکوس (۲۵۵−با�
   assert.deepEqual(Array.from(out.data.slice(0, 4)), [255, 255, 255, 255], 'سفید CMYK → ۲۵۵');
   assert.deepEqual(Array.from(out.data.slice(4, 8)), [0, 0, 0, 255], 'مشکی CMYK → ۰');
 });
+
+
+/* ─────────── بستهٔ ساخت PSD تخت برای آزمون حالت‌های رنگی ─────────── */
+function flatPSD({ width, height, mode, channels, depth = 8, palette = null, planes }) {
+  // چیدمان: هدر(۲۶) + دادهٔ حالت رنگی + منابع(۰) + Layer&Mask(۰) + [compression(۲) + داده]
+  const cmd = palette ? palette : new Uint8Array(0);
+  const cmdBlock = cmd.length ? 4 + cmd.length : 4;
+  const bytePlanes = planes.map((p) => p);
+  const dataLen = 2 + bytePlanes.reduce((n, p) => n + p.length, 0);
+  const buf = new Uint8Array(26 + cmdBlock + 4 + 4 + dataLen);
+  const dv = new DataView(buf.buffer);
+  buf.set([0x38, 0x42, 0x50, 0x53], 0);
+  dv.setUint16(4, 1, false);
+  dv.setUint16(12, channels, false);
+  dv.setUint32(14, height, false);
+  dv.setUint32(18, width, false);
+  dv.setUint16(22, depth, false);
+  dv.setUint16(24, mode, false);
+  let o = 26;
+  dv.setUint32(o, cmd.length, false); o += 4;
+  if (cmd.length) { buf.set(cmd, o); o += cmd.length; }
+  dv.setUint32(o, 0, false); o += 4;          // image resources
+  dv.setUint32(o, 0, false); o += 4;          // layer & mask
+  dv.setUint16(o, 0, false); o += 2;          // compression = RAW
+  for (const p of bytePlanes) { buf.set(p, o); o += p.length; }
+  return buf;
+}
+
+test('رگرسیون: کانال آلفای حالت Grayscale خوانده می‌شود (ch=2)', async () => {
+  const { decodeImage } = await import('../src/formats/imageio.js');
+  const W = 2, H = 1;
+  // کانال ۰ = خاکستری، کانال ۱ = آلفا؛ پیکسل ۰ مات، پیکسل ۱ شفاف
+  const buf = flatPSD({
+    width: W, height: H, mode: 1, channels: 2,
+    planes: [new Uint8Array([200, 200]), new Uint8Array([255, 0])],
+  });
+  const out = await decodeImage(buf);
+  assert.deepEqual(Array.from(out.data.slice(0, 4)), [200, 200, 200, 255], 'پیکسل مات');
+  assert.equal(out.data[7], 0, 'کانال آلفا در پیکسل دوم صفر است (پیش‌تر ۲۵۵ تحمیل می‌شد)');
+});
+
+test('رگرسیون: کانال آلفای CMYK در جایگاه چهارم آرایه قرار می‌گیرد (ch=5)', async () => {
+  const { decodeImage } = await import('../src/formats/imageio.js');
+  const W = 2, H = 1;
+  // سفید (مرکب ۰ → بایت ۲۵۵) و مشکی؛ آلفا: مات و شفاف
+  const buf = flatPSD({
+    width: W, height: H, mode: 4, channels: 5,
+    planes: [
+      new Uint8Array([255, 0]), new Uint8Array([255, 0]),
+      new Uint8Array([255, 0]), new Uint8Array([255, 0]),
+      new Uint8Array([255, 0]),
+    ],
+  });
+  const out = await decodeImage(buf);
+  assert.deepEqual(Array.from(out.data.slice(0, 4)), [255, 255, 255, 255], 'سفید مات');
+  assert.equal(out.data[7], 0, 'آلفای پیکسل دوم = ۰');
+});
+
+test('رگرسیون: حالت Bitmap (۱ بیت) و Indexed (با پالت) خوانده می‌شوند', async () => {
+  const { decodeImage } = await import('../src/formats/imageio.js');
+  // Bitmap 8×1: بایت 0b10100000 → پیکسل‌ها: سیاه، سفید، سیاه، سفید، سفید، سفید، سفید، سفید
+  const bitmap = flatPSD({
+    width: 8, height: 1, mode: 0, channels: 1, depth: 1,
+    planes: [new Uint8Array([0b10100000])],
+  });
+  const b = await decodeImage(bitmap);
+  assert.equal(b.data[0], 0, 'بیت ۱ = سیاه');
+  assert.equal(b.data[4], 255, 'بیت ۰ = سفید');
+  assert.equal(b.data[8], 0, 'بیت بعدی = سیاه');
+  // Indexed 2×1 با پالت ۷۶۸ بایتی: ایندکس ۱ = قرمز، ایندکس ۲ = سبز
+  const pal = new Uint8Array(768);
+  pal[3] = 255;                                 // ایندکس ۱ → R=255
+  pal[6 + 1] = 255;                             // ایندکس ۲ → G=255
+  const indexed = flatPSD({
+    width: 2, height: 1, mode: 2, channels: 1, palette: pal,
+    planes: [new Uint8Array([1, 2])],
+  });
+  const idx = await decodeImage(indexed);
+  assert.deepEqual(Array.from(idx.data.slice(0, 4)), [255, 0, 0, 255], 'ایندکس ۱ → قرمز');
+  assert.deepEqual(Array.from(idx.data.slice(4, 8)), [0, 255, 0, 255], 'ایندکس ۲ → سبز');
+});
+
+test('رگرسیون: حالت Lab (۹) به sRGB تبدیل می‌شود', async () => {
+  const { decodeImage } = await import('../src/formats/imageio.js');
+  // سه پیکسل: L=100 (سفید)، L=0 (سیاه)، خاکستری میانی با a=b=128
+  const buf = flatPSD({
+    width: 3, height: 1, mode: 9, channels: 3,
+    planes: [
+      new Uint8Array([255, 0, 128]),
+      new Uint8Array([128, 128, 128]),
+      new Uint8Array([128, 128, 128]),
+    ],
+  });
+  const out = await decodeImage(buf);
+  const px = (i) => Array.from(out.data.slice(i * 4, i * 4 + 3));
+  assert.ok(px(0).every((v) => v >= 250), 'L=100 → سفید (' + px(0).join(',') + ')');
+  assert.ok(px(1).every((v) => v <= 3), 'L=0 → سیاه (' + px(1).join(',') + ')');
+  const mid = px(2);
+  assert.ok(Math.abs(mid[0] - mid[1]) <= 1 && Math.abs(mid[1] - mid[2]) <= 1, 'خاکستری بی‌رنگ می‌ماند');
+});
+
+test('رگرسیون: حالت Duotone (۸) به‌صورت خاکستری خوانده می‌شود', async () => {
+  const { decodeImage } = await import('../src/formats/imageio.js');
+  const buf = flatPSD({ width: 2, height: 1, mode: 8, channels: 1, planes: [new Uint8Array([64, 200])] });
+  const out = await decodeImage(buf);
+  assert.deepEqual(Array.from(out.data.slice(0, 4)), [64, 64, 64, 255]);
+  assert.deepEqual(Array.from(out.data.slice(4, 8)), [200, 200, 200, 255]);
+});

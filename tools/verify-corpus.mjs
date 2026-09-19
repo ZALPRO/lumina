@@ -5,34 +5,87 @@
 // خروجی موتور لومیما را با مرجع psd-tools مقایسه می‌کند.
 //
 // اجرا:
-//   node tools/verify-corpus.mjs                    # فایل‌های کش‌شده در /tmp/corpus
+//   node tools/verify-corpus.mjs                    # فایل‌های کش‌شده در .corpus/ (ریشهٔ مخزن)
 //   node tools/verify-corpus.mjs --download         # دانلود مجموعه از GitHub
 //   node tools/verify-corpus.mjs --dir=/path/to/psd # پوشهٔ دلخواه
 import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { decodeLayeredPSD } from '../src/formats/psd-read.js';
 
+const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+
 const BASE = 'https://raw.githubusercontent.com/psd-tools/psd-tools/main/tests/psd_files';
+// مجموعهٔ سنجیده‌شده: RGB/CMYK/Grayscale، عمق ۸/۱۶/۳۲، RAW/RLE/ZIP، فایل تخت و
+// چندلایه، ترکیب تودرتو، برش، ماسک سراسری، لایه‌های تنظیم و متنی.
 const FILES = [
-  '1layer.psd', '2layers.psd', '16bit5x5.psd',
+  '1layer.psd', '2layers.psd', '16bit5x5.psd', '32bit.psd', '32bit5x5.psd',
   'cmyk-gray-ramp.psd', 'cmyk-spot.psd',
-  'adjustments/curves_rgb.psd', 'adjustments/curves_cmyk.psd',
+  'adjustment-fillers.psd', 'adjustment-mask.psd',
+  'adjustments/adjustment_backdrop_test.psd',
+  'adjustments/adjustment_clipping.psd',
+  'adjustments/adjustment_nested_composition_1.psd',
+  'adjustments/adjustment_nested_composition_2.psd',
+  'adjustments/adjustment_nested_composition_3.psd',
+  'adjustments/adjustment_nested_composition_4.psd',
+  'adjustments/adjustment_nested_composition_5.psd',
+  'adjustments/brightnesscontrast_cmyk.psd',
+  'adjustments/brightnesscontrast_grayscale.psd',
+  'adjustments/brightnesscontrast_legacy_cmyk.psd',
+  'adjustments/brightnesscontrast_legacy_grayscale.psd',
+  'adjustments/curves_cmyk.psd',
+  'adjustments/curves_grayscale.psd',
+  'adjustments/curves_rgb.psd',
+  'adjustments/exposure_grayscale.psd',
+  'adjustments/invert_cmyk.psd',
+  'adjustments/invert_grayscale.psd',
+  'adjustments/levels_cmyk.psd',
+  'adjustments/levels_grayscale.psd',
+  'adjustments/levels_rgb.psd',
+  'adjustments/posterize_16bits_cmyk.psd',
 ];
 const dirArg = process.argv.find((a) => a.startsWith('--dir='));
-const dir = dirArg ? dirArg.slice(6) : '/tmp/corpus';
+const dir = dirArg ? path.resolve(dirArg.slice(6)) : path.join(ROOT, '.corpus');
 const download = process.argv.includes('--download');
+// --all: هر فایل .psd موجود در مخزن مرجع (اطلاعاتی؛ با --strict کد خروج ۱ می‌شود)
+const allMode = process.argv.includes('--all');
+const strict = process.argv.includes('--strict');
+const limitArg = process.argv.find((a) => a.startsWith('--limit='));
+const limit = limitArg ? Number(limitArg.slice(8)) : 0;
+
+async function downloadOne(rel, attempts = 3) {
+  const dest = path.join(dir, path.basename(rel));
+  if (fs.existsSync(dest)) return true;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const res = await fetch(`${BASE}/${rel}`);
+      if (!res.ok) { console.log(`⚠️  دانلود نشد: ${rel} (${res.status})`); return false; }
+      fs.writeFileSync(dest, Buffer.from(await res.arrayBuffer()));
+      console.log(`⬇️  ${path.basename(rel)}`);
+      return true;
+    } catch (e) {
+      if (i === attempts - 1) { console.log(`⚠️  خطای شبکه در ${rel}: ${e.message}`); return false; }
+      await new Promise((r) => setTimeout(r, 500 * (i + 1)));
+    }
+  }
+  return false;
+}
 
 fs.mkdirSync(dir, { recursive: true });
-if (download) {
-  for (const f of FILES) {
-    const dest = path.join(dir, path.basename(f));
-    if (fs.existsSync(dest)) continue;
-    const res = await fetch(`${BASE}/${f}`);
-    if (!res.ok) { console.log(`⚠️  دانلود نشد: ${f} (${res.status})`); continue; }
-    fs.writeFileSync(dest, Buffer.from(await res.arrayBuffer()));
-    console.log(`⬇️  ${path.basename(f)}`);
+if (download || allMode) {
+  let list = FILES;
+  if (allMode) {
+    const tree = await (await fetch('https://api.github.com/repos/psd-tools/psd-tools/git/trees/main?recursive=1')).json();
+    list = (tree.tree || [])
+      .map((t) => t.path)
+      .filter((p) => p.startsWith('tests/psd_files/') && p.toLowerCase().endsWith('.psd'))
+      .map((p) => p.slice('tests/psd_files/'.length))
+      .sort();
+    if (limit) list = list.slice(0, limit);
+    console.log(`ℹ️  حالت --all: ${list.length} فایل .psd از مخزن مرجع`);
   }
+  for (const f of list) await downloadOne(f);
 }
 
 const files = fs.readdirSync(dir).filter((f) => /\.(psd|psb)$/i.test(f)).sort();
@@ -84,9 +137,18 @@ for f in ${JSON.stringify(files)}:
         depth = hdr.depth
         mode = psd.color_mode.name
         # ۸ بیت: یک بایت | ۱۶ بیت: دو بایت (بایت بالا) | ۳۲ بیت: float32 (۰..۱)
+        if depth == 1:
+            # ۱ بیت در هر نمونه: بیت‌ها از بایت بالا (چپ‌چین) خوانده می‌شوند
+            row_bytes = (W + 7) // 8
+            planes = [b[:(row_bytes * H)] for b in planes]
+            def bit(i):
+                y, x = divmod(i, W)
+                return (planes[0][y * row_bytes + (x >> 3)] >> (7 - (x & 7))) & 1
         step = 4 if depth == 32 else (2 if depth == 16 else 1)
         import struct as _struct
         def sample(c, i):
+            if depth == 1:
+                return 0 if bit(i) else 255          # ۱ = سیاه، ۰ = سفید
             if depth == 32:
                 v = _struct.unpack('>f', planes[c][i:i+4])[0]
                 return round(255 * min(1.0, max(0.0, v)))
@@ -94,14 +156,47 @@ for f in ${JSON.stringify(files)}:
         def px(x, y):
             i = (y * W + x) * step
             g = lambda c: sample(c, i)
-            if mode == 'CMYK' or (mode == 'RGB' and ch >= 4 and ch > 4):
-                # CMYK معکوس ذخیره می‌شود: بایت = 255 − مرکب
+            if mode == 'CMYK':
+                # CMYK معکوس ذخیره می‌شود: بایت = 255 − مرکب؛ کانال پنجم (اگر باشد) آلفا
                 C, M, Y, K = [255 - g(c) for c in range(4)]
-                return [round((255-C)*(255-K)/255), round((255-M)*(255-K)/255), round((255-Y)*(255-K)/255), 255]
-            if ch == 1: return [g(0), g(0), g(0), 255]
-            if ch == 2: return [g(0), g(0), g(0), sample(1, i)]
-            if ch == 3: return [g(0), g(1), g(2), 255]
-            return [g(0), g(1), g(2), g(3)]
+                a = g(4) if ch >= 5 else 255
+                return [round((255-C)*(255-K)/255), round((255-M)*(255-K)/255), round((255-Y)*(255-K)/255), a]
+            if mode == 'BITMAP':
+                v = sample(0, i)
+                a = 255                      # Bitmap: آلفا در فایل‌های آزمون نیست
+                return [v, v, v, a]
+            if mode == 'INDEXED':
+                pal = bytes(psd._record.color_mode_data.value)[:768]
+                k = sample(0, i) * 3
+                a = 255
+                return [pal[k], pal[k+1], pal[k+2], a]
+            if mode == 'DUOTONE':
+                v = g(0)
+                return [v, v, v, 255]
+            if mode == 'LAB':
+                L = g(0) * 100 / 255; a = g(1) - 128; b = g(2) - 128
+                fy = (L + 16) / 116; fx = fy + a / 500; fz = fy - b / 200
+                xr = fx**3 if fx**3 > 0.008856 else (116*fx - 16) / 903.3
+                yr = fy**3 if L > 8 else L / 903.3
+                zr = fz**3 if fz**3 > 0.008856 else (116*fz - 16) / 903.3
+                X50, Y50, Z50 = xr*0.9642, yr*1.0, zr*0.8249
+                X =  0.9555766*X50 - 0.0230393*Y50 + 0.0631636*Z50
+                Y = -0.0282895*X50 + 1.0099416*Y50 + 0.0210077*Z50
+                Z =  0.0122982*X50 - 0.0204830*Y50 + 1.3299098*Z50
+                def gam(c):
+                    c = 0.0 if c <= 0 else (1.0 if c >= 1 else c)
+                    return 12.92*c if c <= 0.0031308 else 1.055*c**(1/2.4) - 0.055
+                rl = 3.2404542*X - 1.5371385*Y - 0.4985314*Z
+                gl = -0.9692660*X + 1.8760108*Y + 0.0415560*Z
+                bl = 0.0556434*X - 0.2040259*Y + 1.0572252*Z
+                return [round(gam(rl)*255), round(gam(gl)*255), round(gam(bl)*255), 255]
+            if mode == 'GRAYSCALE':
+                # کانال دوم (اگر باشد) کانال شفافیت است
+                a = g(1) if ch >= 2 else 255
+                return [g(0), g(0), g(0), a]
+            # RGB: کانال چهارم (اگر باشد) آلفا؛ کانال‌های اضافه (spot) نادیده
+            a = g(3) if ch >= 4 else 255
+            return [g(0), g(1), g(2), a]
         pts = [(0,0), (W//2, H//2), (W-1, H-1)]
         out[f] = {'w': W, 'h': H, 'layers': len(list(psd.descendants())),
                   'mode': mode, 'channels': ch,

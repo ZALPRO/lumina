@@ -104,19 +104,7 @@ jobs:
           tag_name: ${{ steps.tag.outputs.tag }}
           name: Lumina ${{ steps.tag.outputs.tag }}
           draft: false
-          generate_release_notes: true
+          # بدنهٔ ریلیز دستی نوشته می‌شود (رلیز از قبل موجود است)؛ اینجا فقط
+          # فایل‌های سه سکو به همان ریلیز اضافه می‌شوند.
+          generate_release_notes: false
           files: out/*
-          body: |
-            ## Downloads
-
-            | Platform | File | How to run |
-            |---|---|---|
-            | macOS (Apple Silicon) | `Lumina-*-mac-arm64.dmg` | right-click → Open the first time (unsigned build) |
-            | macOS (Intel) | `Lumina-*-mac-x64.dmg` | same |
-            | Linux (any) | `Lumina-*-linux-x86_64.AppImage` | `chmod +x` and run |
-            | Linux (Debian/Ubuntu) | `Lumina-*-linux-amd64.deb` | `sudo apt install ./Lumina-*-linux-amd64.deb` |
-            | Linux (portable) | `Lumina-*-linux-x64.tar.gz` | unpack and run `./lumina` |
-            | Windows | `Lumina-Setup-*-win-x64.exe` / `Lumina-*-portable.exe` | run; SmartScreen → More info → Run anyway |
-
-            Full instructions: [docs/INSTALL.md](https://github.com/${{ github.repository }}/blob/main/docs/INSTALL.md).
-            Verification evidence: [docs/VERIFICATION.md](https://github.com/${{ github.repository }}/blob/main/docs/VERIFICATION.md).

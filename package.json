@@ -38,9 +38,9 @@
   },
   "scripts": {
     "web": "node scripts/serve.js",
-    "test": "node --test test/",
-    "test:unit": "node --test test/*.test.js",
-    "test:browser": "node --test test/browser.e2e.js",
+    "test": "node scripts/run-tests.mjs",
+    "test:unit": "node scripts/run-tests.mjs --unit",
+    "test:browser": "node scripts/run-tests.mjs --browser",
     "demo": "node cli/demo.js",
     "bench": "node scripts/bench.js",
     "screenshot": "node scripts/screenshot.mjs",
@@ -53,7 +53,8 @@
     "dist:linux": "electron-builder --linux AppImage deb tar.gz --publish never",
     "dist:mac": "electron-builder --mac dmg zip --publish never",
     "dist:win": "electron-builder --win portable nsis --publish never",
-    "dist:all": "electron-builder --linux --mac --win --publish never"
+    "dist:all": "electron-builder --linux --mac --win --publish never",
+    "verify:corpus:all": "node tools/verify-corpus.mjs --all"
   },
   "devDependencies": {
     "electron": "^41.7.1",

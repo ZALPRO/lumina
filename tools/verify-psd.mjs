@@ -2,6 +2,8 @@
 // اجرا:  node tools/verify-psd.mjs
 // فایل نمونه را می‌سازد و (در صورت نصب بودن psd-tools پایتون) مستقل اعتبارسنجی می‌کند.
 import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import { Document } from '../src/document/document.js';
 import { Paint } from '../src/document/paint.js';
@@ -49,7 +51,9 @@ doc.addLayer(new Layer({
   adjustment: { type: 'curves', label: 'Curves', points: [[0, 16], [64, 96], [128, 150], [255, 240]] },
 }));
 
-const outPath = process.argv[2] || '/home/user/out/verify-layered.psd';
+const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+const outPath = process.argv[2] ? path.resolve(process.argv[2]) : path.join(ROOT, 'out', 'verify-layered.psd');
+fs.mkdirSync(path.dirname(outPath), { recursive: true });
 const compression = process.env.PSD_COMPRESSION || 'zipPred';   // rle | zip | zipPred
 const depth = process.env.PSD_DEPTH === '16' ? 16 : 8;
 const buf = await encodeLayeredPSD(doc, {

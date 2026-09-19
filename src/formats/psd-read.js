@@ -214,6 +214,88 @@ function readFxColor(buf, off) {
 
 function latin1(u8) { let s = ''; for (let i = 0; i < u8.length; i++) s += String.fromCharCode(u8[i]); return s; }
 
+// آلفای تصویر ادغام‌شده: کانال شفافیت بعد از کانال‌های پایهٔ حالت رنگی می‌آید
+// (RGB: ۳+۱، Grayscale: ۱+۱، CMYK: ۴+۱). اگر نباشد، تصویر مات است.
+// برابر‌سازی پلن خام با بایت‌ها:
+//   Bitmap (۱ بیت): هر بایت ۸ پیکسل؛ بیت ۰ = سفید (روشن) و ۱ = سیاه، بر اساس
+//   مستندات فتوشاپ: در حالت Bitmap، ۱ یعنی سیاه و ۰ یعنی سفید.
+//   Indexed: بایت ایندکس پالت است → RGB از پالت ۷۶۸ بایتی.
+function expandBitmapPlane(plane, width) {
+  const H = Math.floor(plane.length / (Math.ceil(width / 8) || 1));
+  const out = new Uint8Array(width * H);
+  const rowBytes = Math.ceil(width / 8);
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < width; x++) {
+      const byte = plane[y * rowBytes + (x >> 3)] || 0;
+      const bit = (byte >> (7 - (x & 7))) & 1;
+      out[y * width + x] = bit ? 0 : 255;      // 1 = سیاه، 0 = سفید
+    }
+  }
+  return out;
+}
+
+function indexedToRgbPlanes(plane, palette) {
+  const n = plane.length;
+  const R = new Uint8Array(n), G = new Uint8Array(n), B = new Uint8Array(n);
+  for (let i = 0; i < n; i++) {
+    const idx = plane[i] * 3;
+    R[i] = palette[idx] || 0; G[i] = palette[idx + 1] || 0; B[i] = palette[idx + 2] || 0;
+  }
+  return [R, G, B];
+}
+
+// Lab (حالت رنگی ۹ فتوشاپ) → sRGB.
+// فایل ۸ بیتی: L = بایت×۱۰۰/۲۵۵ و a,b = بایت−۱۲۸ (برای ۱۶ بیتی همان بایت بالا).
+// مسیر: Lab(D50) → XYZ(D50) → تطبیق برادفورد به D65 → sRGB خطی → گاما.
+const LAB_D50 = [0.9642, 1.0, 0.8249];
+const BRADFORD_D50_TO_D65 = [
+  0.9555766, -0.0230393, 0.0631636,
+  -0.0282895, 1.0099416, 0.0210077,
+  0.0122982, -0.0204830, 1.3299098,
+];
+function srgbGamma(c) {
+  const v = c <= 0 ? 0 : (c >= 1 ? 1 : c);
+  return v <= 0.0031308 ? v * 12.92 : 1.055 * Math.pow(v, 1 / 2.4) - 0.055;
+}
+export function labToRgbPlanes(Lp, Ap, Bp, n) {
+  const R = new Uint8Array(n), G = new Uint8Array(n), B = new Uint8Array(n);
+  for (let i = 0; i < n; i++) {
+    const L = (Lp[i] * 100) / 255;
+    const a = Ap[i] - 128;
+    const b = Bp[i] - 128;
+    const fy = (L + 16) / 116;
+    const fx = fy + a / 500;
+    const fz = fy - b / 200;
+    const fx3 = fx * fx * fx, fz3 = fz * fz * fz;
+    const xr = fx3 > 0.008856 ? fx3 : (116 * fx - 16) / 903.3;
+    const yr = L > 8 ? fy * fy * fy : L / 903.3;
+    const zr = fz3 > 0.008856 ? fz3 : (116 * fz - 16) / 903.3;
+    // XYZ در D50
+    const X50 = xr * LAB_D50[0], Y50 = yr * LAB_D50[1], Z50 = zr * LAB_D50[2];
+    // تطبیق به D65
+    const X = BRADFORD_D50_TO_D65[0] * X50 + BRADFORD_D50_TO_D65[1] * Y50 + BRADFORD_D50_TO_D65[2] * Z50;
+    const Y = BRADFORD_D50_TO_D65[3] * X50 + BRADFORD_D50_TO_D65[4] * Y50 + BRADFORD_D50_TO_D65[5] * Z50;
+    const Z = BRADFORD_D50_TO_D65[6] * X50 + BRADFORD_D50_TO_D65[7] * Y50 + BRADFORD_D50_TO_D65[8] * Z50;
+    // XYZ(D65) → sRGB خطی
+    const rl = 3.2404542 * X - 1.5371385 * Y - 0.4985314 * Z;
+    const gl = -0.9692660 * X + 1.8760108 * Y + 0.0415560 * Z;
+    const bl = 0.0556434 * X - 0.2040259 * Y + 1.0572252 * Z;
+    R[i] = Math.round(srgbGamma(rl) * 255);
+    G[i] = Math.round(srgbGamma(gl) * 255);
+    B[i] = Math.round(srgbGamma(bl) * 255);
+  }
+  return [R, G, B];
+}
+
+function alphaPlaneFor(planes, channels, colorMode) {
+  if (colorMode === 4) return channels >= 5 ? planes[4] : null;   // CMYK
+  if (colorMode === 1 || colorMode === 0 || colorMode === 2 || colorMode === 8) {
+    return channels >= 2 ? planes[1] : null;   // Grayscale / Bitmap / Indexed / Duotone
+  }
+  if (colorMode === 9) return channels >= 4 ? planes[3] : null;    // Lab: 3 کانال پایه
+  return channels >= 4 ? planes[3] : null;                        // RGB
+}
+
 function planesToPaint(w, h, planes, alphaMode) {
   const paint = new Paint(w, h);
   const R2 = planes[0], G2 = planes[1], B2 = planes[2], A2 = planes[3];
@@ -301,11 +383,22 @@ export async function decodeLayeredPSD(buf) {
   const colorMode = r.u16();
   const isCMYK = colorMode === 4;
   const isGray = colorMode === 1;
-  if (!isCMYK && !isGray && colorMode !== 3) throw new Error('PSD: حالت رنگی ' + colorMode + ' پشتیبانی نمی‌شود');
-  if (depth !== 8 && depth !== 16 && depth !== 32) throw new Error('PSD: عمق ' + depth + ' بیت پشتیبانی نمی‌شود');
+  const isBitmap = colorMode === 0;
+  const isIndexed = colorMode === 2;
+  const isDuotone = colorMode === 8;   // تک‌کاناله؛ به‌صورت خاکستری خوانده می‌شود
+  const isLab = colorMode === 9;
+  if (!isCMYK && !isGray && !isBitmap && !isIndexed && !isDuotone && !isLab && colorMode !== 3) {
+    throw new Error('PSD: حالت رنگی ' + colorMode + ' پشتیبانی نمی‌شود');
+  }
+  // Bitmap = ۱ بیت در هر نمونه؛ در فشرده‌سازی RAW با بایت بالا (چپ‌چین) پر می‌شود.
+  if (isBitmap && depth !== 1) throw new Error('PSD: عمق ' + depth + ' بیت برای حالت Bitmap پشتیبانی نمی‌شود');
+  if (!isBitmap && depth !== 8 && depth !== 16 && depth !== 32) throw new Error('PSD: عمق ' + depth + ' بیت پشتیبانی نمی‌شود');
 
-  // Color mode data
-  const cmdLen = r.u32(); r.skip(cmdLen);
+  // Color mode data — برای حالت Indexed این ۷۶۸ بایت پالت RGB است
+  const cmdLen = r.u32();
+  const cmdStart = r.p;
+  const palette = (colorMode === 2 && cmdLen >= 768) ? r.b.slice(cmdStart, cmdStart + 768) : null;
+  r.p = cmdStart + cmdLen;
 
   // Image resources → ICC
   let icc = null;
@@ -454,20 +547,38 @@ export async function decodeLayeredPSD(buf) {
         const data = r.bytes(Math.max(0, r.b.length - r.p));
         let src = await inflateZlib(data);
         const bytesPer = depth === 32 ? 4 : (depth === 16 ? 2 : 1);
+        const rowBytes = isBitmap ? Math.ceil(width / 8) : width * bytesPer;
+        const planeBytes = isBitmap ? rowBytes * height : planeLen * bytesPer;
         if (compression === 3 && depth === 32) src = unshuffle32(src, planeLen * channels);
-        if (compression === 3) src = applyPredictorDecode(src, width * (depth === 32 ? 1 : bytesPer), height * channels);
+        if (compression === 3) src = applyPredictorDecode(src, isBitmap ? rowBytes : width * (depth === 32 ? 1 : bytesPer), height * channels);
         const planes = [];
         for (let c = 0; c < channels; c++) {
-          const plane = new Uint8Array(planeLen);
-          const base = c * planeLen * bytesPer;
-          if (depth === 32) for (let i = 0; i < planeLen; i++) plane[i] = f32ToByte(src, base + i * 4);
-          else if (bytesPer === 2) for (let i = 0; i < planeLen; i++) plane[i] = src[base + i * 2];
-          else plane.set(src.subarray(base, base + planeLen));
-          planes.push(plane);
+          const base = c * planeBytes;
+          if (isBitmap) {
+            planes.push(expandBitmapPlane(src.subarray(base, base + planeBytes), width));
+          } else {
+            const plane = new Uint8Array(planeLen);
+            if (depth === 32) for (let i = 0; i < planeLen; i++) plane[i] = f32ToByte(src, base + i * 4);
+            else if (bytesPer === 2) for (let i = 0; i < planeLen; i++) plane[i] = src[base + i * 2];
+            else plane.set(src.subarray(base, base + planeLen));
+            planes.push(plane);
+          }
         }
-        if (isCMYK) merged = planesToPaint(width, height, cmykToRgbPlanes(planes, planeLen), false);
-        else if (isGray) merged = planesToPaint(width, height, [planes[0], planes[0], planes[0], null], true);
-        else merged = planesToPaint(width, height, planes, true);
+        const alpha = alphaPlaneFor(planes, channels, colorMode);
+        if (isCMYK) {
+          const rgb = cmykToRgbPlanes(planes, planeLen);   // [R, G, B, null]
+          merged = planesToPaint(width, height, [rgb[0], rgb[1], rgb[2], alpha], false);
+        }
+        else if (isIndexed) {
+          const rgb = indexedToRgbPlanes(planes[0], palette || new Uint8Array(768));
+          merged = planesToPaint(width, height, [rgb[0], rgb[1], rgb[2], alpha], true);
+        }
+        else if (isLab) {
+          const rgb = labToRgbPlanes(planes[0], planes[1], planes[2], planeLen);
+          merged = planesToPaint(width, height, [rgb[0], rgb[1], rgb[2], alpha], true);
+        }
+        else if (isGray || isBitmap || isDuotone) merged = planesToPaint(width, height, [planes[0], planes[0], planes[0], alpha], true);
+        else merged = planesToPaint(width, height, [planes[0], planes[1], planes[2], alpha], true);
       } else if (compression === 0 || compression === 1) {
         const planes = [];
         const rowCounts = [];
@@ -479,6 +590,22 @@ export async function decodeLayeredPSD(buf) {
           }
         }
         for (let c = 0; c < channels; c++) {
+          if (isBitmap) {
+            // ۱ بیت: هر ردیف ceil(width/8) بایت (RAW) یا همان طول پس از RLE
+            const rwb = Math.ceil(width / 8);
+            const packedPlane = new Uint8Array(rwb * height);
+            if (compression === 0) {
+              packedPlane.set(r.bytes(rwb * height));
+            } else {
+              for (let y = 0; y < height; y++) {
+                const n = rowCounts[c][y];
+                const dec = packBitsDecode(r.bytes(n), rwb);
+                packedPlane.set(dec.subarray(0, rwb), y * rwb);
+              }
+            }
+            planes.push(expandBitmapPlane(packedPlane, width));
+            continue;
+          }
           const plane = new Uint8Array(planeLen);
           const bpp = depth === 32 ? 4 : (depth === 16 ? 2 : 1);
           if (compression === 0) {
@@ -498,9 +625,21 @@ export async function decodeLayeredPSD(buf) {
           }
           planes.push(plane);
         }
-        if (isCMYK) merged = planesToPaint(width, height, cmykToRgbPlanes(planes, planeLen), false);
-        else if (isGray) merged = planesToPaint(width, height, [planes[0], planes[0], planes[0], null], true);
-        else merged = planesToPaint(width, height, planes, true);
+        const alpha = alphaPlaneFor(planes, channels, colorMode);
+        if (isCMYK) {
+          const rgb = cmykToRgbPlanes(planes, planeLen);   // [R, G, B, null]
+          merged = planesToPaint(width, height, [rgb[0], rgb[1], rgb[2], alpha], false);
+        }
+        else if (isIndexed) {
+          const rgb = indexedToRgbPlanes(planes[0], palette || new Uint8Array(768));
+          merged = planesToPaint(width, height, [rgb[0], rgb[1], rgb[2], alpha], true);
+        }
+        else if (isLab) {
+          const rgb = labToRgbPlanes(planes[0], planes[1], planes[2], planeLen);
+          merged = planesToPaint(width, height, [rgb[0], rgb[1], rgb[2], alpha], true);
+        }
+        else if (isGray || isBitmap || isDuotone) merged = planesToPaint(width, height, [planes[0], planes[0], planes[0], alpha], true);
+        else merged = planesToPaint(width, height, [planes[0], planes[1], planes[2], alpha], true);
       }
     } catch { merged = null; }
   }

@@ -19,6 +19,8 @@ see [docs/VERIFICATION.md](docs/VERIFICATION.md).
   - Read support for 8/16/**32-bit float** documents, flat and layered, including
     nested compositions, clipping masks, global masks and per-channel
     compression.
+  - Colour modes: **RGB, CMYK, Grayscale, Bitmap (1-bit), Indexed (with palette)
+    and Lab** (D50 → Bradford → sRGB); Duotone decodes as grayscale.
   - Tagged blocks: `luni`, `lsct`, `lfx2`, `lrFX`, `vmsk`/`vsms`, `TySh`, `vibA`,
     `Crv ` and other adjustment keys, plus the descriptor mini-format in both
     directions.
@@ -46,6 +48,14 @@ see [docs/VERIFICATION.md](docs/VERIFICATION.md).
 
 ### Fixed
 
+- **Grayscale / CMYK transparency**: the merged image's alpha channel was
+  ignored for Grayscale (`ch=2`), CMYK (`ch=5`) and other extra-channel
+  documents, so transparent areas rendered as opaque. Found by scanning all 254
+  reference files (`gray0.psd`, `gray-blend-modes.psd`, `cmyk-blend-modes.psd`).
+- **CMYK alpha slot**: `cmykToRgbPlanes()` reserved the fourth slot with `null`,
+  which discarded the alpha plane attached to it.
+- **Reference-tool bug exposed by the scan**: the verifier treated any RGB file
+  with more than four channels as CMYK (`stroke-without-vector-mask.psd`).
 - **Merged image offset** — the flattened composite is read from the end of the
   whole Layer & Mask section; documents that store extra data between the
   layer-info block and the image data (852 bytes in `adjustment_backdrop_test.psd`)

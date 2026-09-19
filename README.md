@@ -12,7 +12,7 @@ Layered PSD read/write · native Curves, Levels & Exposure · vector masks · la
 [![Release](https://github.com/ZALPRO/lumina/actions/workflows/release.yml/badge.svg)](https://github.com/ZALPRO/lumina/actions/workflows/release.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-2f81f7.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/node-%3E%3D20-3ddcc3.svg)](package.json)
-[![Tests](https://img.shields.io/badge/tests-269%20passing-34c759.svg)](#verification)
+[![Tests](https://img.shields.io/badge/tests-274%20passing-34c759.svg)](#verification)
 [![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Linux%20%7C%20Windows-8e8e93.svg)](#install)
 
 [Install](#install) · [Features](#features) · [Verification](#verification) · [Architecture](#architecture) · [Contributing](CONTRIBUTING.md)
@@ -49,7 +49,7 @@ real Photoshop files with an independent toolchain — not against itself.
 **Colour & formats**
 
 - ICC-aware PNG read/write; embedded sRGB profile is a standards-compliant one (D50 white point, Bradford `chad`, parametric type-3 curve)
-- Open: PNG, JPEG, WebP, GIF, BMP, QOI, TIFF, DNG, PSD, PSB (8/16/32-bit, RGB/CMYK/Grayscale)
+- Open: PNG, JPEG, WebP, GIF, BMP, QOI, TIFF, DNG, PSD, PSB — including **RGB, CMYK, Grayscale, Bitmap (1-bit), Indexed and Lab** documents at 8/16/32-bit
 - Save: PNG, JPEG, TIFF, BMP, QOI, PSD, and layered PSD (RAW / RLE / ZIP / ZIP+prediction, RGB / CMYK / Grayscale, 8 / 16-bit)
 - Zero runtime dependencies for the engine: the PNG, JPEG, TIFF, WebP, QOI, ZIP and PSD codecs are all in `src/formats/`
 
@@ -96,18 +96,20 @@ using **real Photoshop documents**, and the reference is always the raw plane
 data inside the file — never our own decoder output.
 
 ```bash
-npm test                 # 269 tests (unit + format + real-browser UI)
-npm run verify:corpus    # 7 bundled sample PSDs from the psd-tools repo
-npm run verify:corpus:download   # download and check all 30 files
-npm run verify:psd       # build a feature-rich PSD and validate it externally
+npm test                   # 274 tests (unit + format + real-browser UI)
+npm run verify:corpus      # 30 curated real Photoshop files
+npm run verify:corpus:download   # download that set from the psd-tools repo
+npm run verify:corpus:all  # every .psd in the reference repo (254 files)
+npm run verify:psd         # build a feature-rich PSD and validate it externally
 ```
 
 | Check | Result |
 |---|---|
-| Photoshop corpus (30 real `.psd` files, RGB/CMYK/Gray, 8/16/32-bit, RAW/RLE/ZIP) | **30 / 30 match, 0 pixel differences** |
+| Photoshop corpus (every `.psd` in the reference repo: 254 files) | **253 match, 0 pixel differences**; 1 file is a *Multichannel* document, a mode with no RGB meaning |
+| Curated set of 30 files (RGB/CMYK/Gray/Bitmap/Indexed/Lab, 8/16/32-bit, RAW/RLE/ZIP) | **30 / 30 match** |
 | Layered PSD round-trip (RLE, ZIP+prediction, CMYK) composited by `psd-tools` | **0 pixels differ** |
 | Per-layer channel planes vs. encoder input | **identical** |
-| Automated tests | **269 passing** (incl. 25 in a real headless browser) |
+| Automated tests | **274 passing** (incl. 25 in a real headless browser) |
 | ICC identity transform vs. LCMS | max 1 level, mean 0.0014 |
 
 Full evidence, method and the honest list of remaining limitations:
@@ -139,7 +141,7 @@ Verification method: **[docs/VERIFICATION.md](docs/VERIFICATION.md)**.
 
 ## Known limitations
 
-- Lab, Duotone and Multichannel documents are not decoded (RGB, CMYK and Grayscale are).
+- **Multichannel** documents are rejected (an arbitrary channel set has no RGB meaning). Lab, Duotone, Bitmap and Indexed are decoded.
 - Smart Objects are flattened to pixel layers; their transform metadata is not retained.
 - Embedded **CMYK** ICC profiles are ignored on import (CMYK→RGB uses the standard formula).
 - 32-bit documents can be *opened* but are saved at 8/16-bit.

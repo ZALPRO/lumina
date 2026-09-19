@@ -71,6 +71,32 @@ r = round((255 - c) * (255 - k) / 255);
 Writing applies the same inversion. Getting this backwards produces a
 photographic negative, which is exactly how the bug looked before it was fixed.
 
+## Colour modes and the extra channel
+
+The merged image stores the base channels of the colour mode first, then the
+transparency channel, then any spot/extra channels:
+
+| Mode | Base channels | Alpha (if present) |
+|---|---|---|
+| RGB (3) | R, G, B | channel 3 |
+| Grayscale (1), Bitmap (0), Indexed (2), Duotone (8) | 1 | channel 1 |
+| CMYK (4) | C, M, Y, K | channel 4 |
+| Lab (9) | L, a, b | channel 3 |
+
+Reading the alpha from the wrong index (or ignoring it) makes transparent
+regions render as opaque — that was a real bug found by scanning `gray0.psd`,
+`gray-blend-modes.psd` and `cmyk-blend-modes.psd`.
+
+Mode-specific notes:
+
+- **Bitmap (0)** — one bit per sample, packed 8 pixels per byte, `1 = black`,
+  `0 = white`; row length is `ceil(width / 8)`.
+- **Indexed (2)** — the 768-byte RGB palette lives in the colour-mode-data block
+  at the top of the file, not next to the pixels.
+- **Lab (9)** — 8-bit samples: `L = byte × 100/255`, `a = byte − 128`,
+  `b = byte − 128`. Convert D50 → D65 with the Bradford matrix before sRGB.
+- **Duotone (8)** — single channel; Lumina renders it as grayscale.
+
 ## Tagged blocks worth knowing
 
 | Key | Meaning | Notes |

@@ -4,6 +4,7 @@ import { decodePng, encodePng } from './png.js';
 import { decodeBmp, encodeBmp } from './bmp.js';
 import { decodeQoi, encodeQoi } from './qoi.js';
 import { decodePSD, encodePngLikePSD, isPSD, isPSB } from './psd.js';
+import { decodeLayeredPSD } from './psd-read.js';
 import { decodeJPEG, encodeJPEG, isJPEG } from './jpeg.js';
 import { decodeTIFF, encodeTIFF, isTIFF, isDNG } from './tiff.js';
 import { srgbProfile, isICC } from './icc.js';
@@ -23,13 +24,36 @@ export function detectFormat(u8) {
   return null;
 }
 
+// خواندن PSD/PSB با موتور کامل (همهٔ حالت‌های رنگی، عمق‌ها و فشرده‌سازی‌ها) و
+// برگرداندن تصویر ادغام‌شده به‌صورت RGBA. اگر به هر دلیلی شکست خورد، خوانندهٔ
+// سادهٔ psd.js به‌عنوان پشتیبان اجرا می‌شود.
+export async function decodePSDImage(u8) {
+  try {
+    const d = await decodeLayeredPSD(u8);
+    const { width: w, height: h } = d;
+    const data = new Uint8ClampedArray(w * h * 4);
+    const px = [0, 0, 0, 0];
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        d.merged.getPixel(x, y, px);
+        const o = (y * w + x) * 4;
+        data[o] = px[0]; data[o + 1] = px[1]; data[o + 2] = px[2]; data[o + 3] = px[3];
+      }
+    }
+    return { width: w, height: h, data, icc: d.icc || null };
+  } catch (e) {
+    if (typeof console !== 'undefined') console.warn('خوانندهٔ کامل PSD ناموفق بود:', e.message);
+    return decodePSD(u8);
+  }
+}
+
 // بارگذاری → { width, height, data: Uint8ClampedArray RGBA }
 export async function decodeImage(u8) {
   const fmt = detectFormat(u8);
   if (fmt === 'png') return decodePng(u8);
   if (fmt === 'bmp') return decodeBmp(u8);
   if (fmt === 'qoi') return decodeQoi(u8);
-  if (fmt === 'psd' || fmt === 'psb') return decodePSD(u8);
+  if (fmt === 'psd' || fmt === 'psb') return decodePSDImage(u8);
   if (fmt === 'jpeg') return decodeJPEG(u8);
   if (fmt === 'tiff' || fmt === 'dng') return decodeTIFF(u8);   // DNG: ظرف TIFF، مسیر مشترک
   // WebP/GIF: رمزگشای «بومی مرورگر» (بدون وابستگی سنگین؛ مثل Photopea)

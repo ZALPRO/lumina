@@ -21,32 +21,40 @@
    redone in Python from those planes. This single change flipped several
    "failures" into matches and exposed one genuine bug.
 
-## 1. Real Photoshop corpus — 30 files, 0 differences
+## 1. Real Photoshop corpus — 253 of 254 files, 0 differences
 
 ```bash
-node tools/verify-corpus.mjs --download
+npm run verify:corpus:download   # the curated 30-file set
+node tools/verify-corpus.mjs --all   # every .psd in the reference repository (254)
 ```
 
 ```
-نتیجه: 30 فایل مطابق مرجع مستقل، 0 فایل اختلاف.
+نتیجه: 253 فایل مطابق مرجع مستقل، 1 فایل اختلاف.
 ```
 
-Coverage of the corpus:
+The single remaining file is `4x4_16bit_multichannel.psd` — a **Multichannel**
+document, an arbitrary channel set with no defined RGB interpretation, which the
+reader rejects with a clear message rather than guessing.
+
+Coverage of the full scan (254 files):
 
 | Axis | Values |
 |---|---|
-| Colour modes | RGB, CMYK, Grayscale |
-| Bit depths | 8, 16, 32 (float32) |
+| Colour modes | RGB, CMYK, Grayscale, Bitmap (1-bit), Indexed, Lab, Duotone |
+| Bit depths | 1, 8, 16, 32 (float32) |
 | Compression | RAW, RLE (PackBits), ZIP, ZIP + prediction |
-| Document kind | flat files, layered files, nested compositions (up to 31 layers), clipping masks, global masks |
+| Document kind | flat, layered, nested compositions (up to 220 layers), clipping masks, global masks, layer effects, text and shape layers |
 | Colour management | embedded ICC present / absent |
 
-Files: `curves_{rgb,cmyk,grayscale}`, `levels_{rgb,cmyk,grayscale}`,
-`invert_{cmyk,grayscale}`, `brightnesscontrast_{cmyk,grayscale,legacy_cmyk,legacy_grayscale}`,
-`exposure_grayscale`, `posterize_16bits_cmyk`, `adjustment_nested_composition_1…5`,
-`adjustment_clipping`, `adjustment-fillers`, `adjustment-mask`,
-`adjustment_backdrop_test`, `16bit5x5`, `32bit`, `32bit5x5`, `cmyk-gray-ramp`,
-`cmyk-spot`, `1layer`, `2layers`.
+The curated 30-file set used by CI is the fast, deterministic subset:
+
+| Group | Files |
+|---|---|
+| Structure | `1layer`, `2layers`, `16bit5x5`, `32bit`, `32bit5x5` |
+| Colour | `cmyk-gray-ramp`, `cmyk-spot` |
+| Layers | `adjustment-fillers`, `adjustment-mask`, `adjustment_clipping`, `adjustment_backdrop_test` |
+| Compositions | `adjustment_nested_composition_1…5` |
+| Adjustments | `curves_{rgb,cmyk,grayscale}`, `levels_{rgb,cmyk,grayscale}`, `invert_{cmyk,grayscale}`, `brightnesscontrast_*` (4), `exposure_grayscale`, `posterize_16bits_cmyk` |
 
 ## 2. Our own output, re-read by independent tools
 
@@ -96,12 +104,26 @@ tool on a real file.
    which shifted colours by up to 9 levels in colour-managed readers. Replaced
    with a D50 white point, Bradford `chad` matrix and parametric type-3 curves —
    identity transform accuracy is now ≤1 level (mean 0.0014) against LCMS.
-7. **Our own measurement method** (documented above): `composite()` is not a
-   valid pixel reference.
+7. **Merged-image alpha was ignored for Grayscale, CMYK and other documents with
+   extra channels.** `gray0.psd`, `gray-blend-modes.psd` and `cmyk-blend-modes.psd`
+   rendered transparent regions as opaque white. The alpha plane is now taken at
+   the position the colour mode dictates (RGB 3+1, Grayscale/Bitmap/Indexed 1+1,
+   CMYK 4+1), and a second bug — `cmykToRgbPlanes()` returning `null` in the slot
+   where alpha belongs — was fixed alongside it.
+8. **Our own measurement method** (documented above): `composite()` is not a
+   valid pixel reference — and neither was a condition that classified any RGB
+   file with more than four channels as CMYK (it made
+   `stroke-without-vector-mask.psd` look broken while the engine was right).
+9. **New colour modes**: Bitmap (1-bit unpacking, `1 = black`), Indexed (palette
+   from the colour-mode data block) and Lab (D50 → Bradford adaptation → sRGB)
+   are now decoded, which is what took the corpus from 243 to 253 matches.
 
 ## 5. Honest limitations
 
-- Lab, Duotone and Multichannel documents are not decoded.
+- **Multichannel** documents are rejected (1 file in the corpus); an arbitrary
+  channel set has no defined RGB meaning.
+- Duotone documents are decoded as grayscale (the duotone ink curves are not
+  applied).
 - Smart Objects (`SoLd`/`PlLd`) are flattened to pixel layers.
 - Embedded **CMYK** ICC profiles are ignored on import (the standard CMYK→RGB
   formula is used instead).
