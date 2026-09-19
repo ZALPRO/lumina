@@ -91,8 +91,14 @@
       "maintainer": "ZALPRO (ZalNET) <zalpro@users.noreply.github.com>",
       "executableName": "lumina",
       "artifactName": "${productName}-${version}-linux-${arch}.${ext}",
-      "desktopName": "lumina.desktop",
-      "syncDesktopName": true
+      "syncDesktopName": true,
+      "desktop": {
+        "entry": {
+          "Name": "Lumina",
+          "Comment": "Image editor",
+          "Categories": "Graphics;2DGraphics;RasterGraphics;"
+        }
+      }
     },
     "mac": {
       "category": "public.app-category.graphics-design",
@@ -143,5 +149,6 @@
     "deb": {
       "artifactName": "${productName}-${version}-linux-${arch}.${ext}"
     }
-  }
+  },
+  "desktopName": "lumina.desktop"
 }
