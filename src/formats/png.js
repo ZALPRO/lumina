@@ -29,6 +29,9 @@ export async function decodePng(u8) {
     else if (type === 'IEND') break;
   }
   if (!width || !height) throw new Error('PNG: IHDR یافت نشد');
+  if (width > 32768 || height > 32768 || (width * height) > 100_000_000) {
+    throw new Error(`PNG: Image dimensions (${width}x${height}) exceed safe limits`);
+  }
   if (interlace !== 0) throw new Error('PNG: Adam7 interlacing پشتیبانی نمی‌شود');
   const ch = CHANNELS[colorType];
   if (!ch) throw new Error(`PNG: color type ${colorType} پشتیبانی نمی‌شود`);

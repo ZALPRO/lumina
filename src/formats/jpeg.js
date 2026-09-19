@@ -181,6 +181,9 @@ export function decodeJPEG(buf) {
           frame.precision = seg[0];
           frame.height = view.getUint16(pos + 5, false);
           frame.width = view.getUint16(pos + 7, false);
+          if (!frame.width || !frame.height || frame.width > 32768 || frame.height > 32768 || (frame.width * frame.height) > 100_000_000) {
+            throw new Error(`JPEG: Image dimensions (${frame.width}x${frame.height}) exceed safe limits`);
+          }
           frame.ncomp = seg[9 - 4]; // seg[5]
           for (let i = 0; i < frame.ncomp; i++) {
             const o = 6 + i * 3;

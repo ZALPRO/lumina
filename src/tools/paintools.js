@@ -148,7 +148,7 @@ export function sharpenStamp(paint, w, h, cx, cy, radius, hardness, amount = 0.5
 
 // smudge: کشیدن پیکسل از جهت مخالف «بُرد» (pull) رویِ اسنپ‌شات؛ حافظهٔ لکه فقط local
 // برای قابلیت تست، کل محدودهٔ affected را قبل از اعمال به temp paint (اسنپ‌شات) می‌کشیم.
-export function smudgeStamp(snap, paint, cx, cy, radius, hardness, pullX, pullY, strength = 0.6) {
+export function smudgeStamp(snap, paint, cx, cy, radius, hardness, pullX, pullY, strength = 0.6, snapOx = 0, snapOy = 0) {
   const aa = Math.min(1, 1 / Math.max(1, radius));
   const c = [0, 0, 0, 0]; const s = [0, 0, 0, 0];
   loopBrush(cx, cy, radius, (x, y, d) => {
@@ -156,7 +156,7 @@ export function smudgeStamp(snap, paint, cx, cy, radius, hardness, pullX, pullY,
     if (cov <= 0) return;
     const k = Math.min(0.95, cov * strength);
     const srcX = x - pullX, srcY = y - pullY;
-    snap.getPixel(srcX, srcY, s);
+    snap.getPixel(srcX - snapOx, srcY - snapOy, s);
     paint.getPixel(x, y, c);
     if (s[3] === 0 || c[3] === 0) { if (s[3] > 0) paint.setPixel(x, y, s[0], s[1], s[2], 255); return; }
     const r = c[0] + (s[0] - c[0]) * k;

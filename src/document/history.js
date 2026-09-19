@@ -128,6 +128,9 @@ export function captureDoc(doc) {
     name: l.name, opacity: l.opacity, blendMode: l.blendMode,
     visible: l.visible, isGroup: l.isGroup, isGroupEnd: l.isGroupEnd,
     clipToBelow: l.clipToBelow, style: l.style ? JSON.parse(JSON.stringify(l.style)) : null,
+    adjustment: l.adjustment ? JSON.parse(JSON.stringify(l.adjustment)) : null,
+    ox: l.ox, oy: l.oy,
+    text: l.text ? JSON.parse(JSON.stringify(l.text)) : null,
   }));
   return { order, gui };
 }
@@ -143,6 +146,9 @@ export function restoreDoc(doc, snap) {
     l.visible = g.visible; l.isGroup = g.isGroup; l.isGroupEnd = g.isGroupEnd;
     l.clipToBelow = g.clipToBelow;
     l.style = g.style ? JSON.parse(JSON.stringify(g.style)) : null;
+    if (g.adjustment) l.adjustment = JSON.parse(JSON.stringify(g.adjustment));
+    if (g.ox !== undefined && g.oy !== undefined) l.move(g.ox, g.oy);
+    if (g.text) l.text = JSON.parse(JSON.stringify(g.text));
   });
   if (doc.composer) doc.composer.invalidate();
   return true;

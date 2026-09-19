@@ -7,7 +7,7 @@ export const isNode = typeof process !== 'undefined' && !!process.versions && !!
 export async function inflateZlib(bytes) {
   if (isNode) {
     const zlib = await import('node:zlib');
-    return new Promise((res, rej) => zlib.inflate(Buffer.from(bytes), (e, b) => (e ? rej(e) : res(new Uint8Array(b)))));
+    return new Promise((res, rej) => zlib.inflate(Buffer.from(bytes), { maxOutputLength: 256 * 1024 * 1024 }, (e, b) => (e ? rej(e) : res(new Uint8Array(b)))));
   }
   const ds = new DecompressionStream('deflate');
   const stream = new Blob([bytes]).stream().pipeThrough(ds);

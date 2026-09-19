@@ -379,6 +379,9 @@ export async function decodeLayeredPSD(buf) {
   const channels = r.u16();
   const height = r.u32();
   const width = r.u32();
+  if (!width || !height || width > 32768 || height > 32768 || (width * height) > 100_000_000) {
+    throw new Error(`PSD: Image dimensions (${width}x${height}) exceed safe limits`);
+  }
   const depth = r.u16();
   const colorMode = r.u16();
   const isCMYK = colorMode === 4;

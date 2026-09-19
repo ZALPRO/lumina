@@ -75,7 +75,7 @@ function readIFD(r, offset) {
 
 // ─── LZW (TIFF: MSB-first, EarlyChange=1) ───
 function lzwDecode(data, expected) {
-  const out = new Uint8Array(expected > 0 ? expected : Math.max(1024, data.length * 4));
+  let out = new Uint8Array(expected > 0 ? expected : Math.max(1024, data.length * 4));
   let outPos = 0;
   let bitPos = 0;
   const CLEAR = 256, EOI = 257;
@@ -108,12 +108,13 @@ function lzwDecode(data, expected) {
     else break;
     for (const b of entry) {
       if (outPos >= out.length) {
-        const bigger = new Uint8Array(out.length * 2);
-        bigger.set(out); return lzwDecodeInto(bigger, outPos, b, entry, dict, bitPos, data, codeSize, expected);
+        const bigger = new Uint8Array(Math.max(out.length * 2, outPos + entry.length + 1024));
+        bigger.set(out);
+        out = bigger;
       }
       out[outPos++] = b;
     }
-    if (prev) {
+    if (prev && dict.length < 4096) {
       dict.push([...prev, entry[0]]);
       // EarlyChange=1: افزایش عرض کد یک گام جلوتر
       if (dict.length + 1 >= (1 << codeSize) && codeSize < 12) codeSize++;
@@ -121,12 +122,6 @@ function lzwDecode(data, expected) {
     prev = entry;
   }
   return out.subarray(0, outPos);
-}
-
-// ادامهٔ دیکود در بافر بزرگ‌تر (خیلی کم پیش می‌آید)
-function lzwDecodeInto(out, outPos, firstByte, entry, dict, bitPos, data, codeSize) {
-  out[outPos++] = firstByte;
-  return out;
 }
 
 // ─── PackBits ───
@@ -181,6 +176,9 @@ export async function decodeTIFF(u8) {
 
   const w = tags[T.WIDTH][0];
   const h = tags[T.LENGTH][0];
+  if (!w || !h || w > 32768 || h > 32768 || (w * h) > 100_000_000) {
+    throw new Error(`TIFF: Image dimensions (${w}x${h}) exceed safe limits`);
+  }
   const bits = (tags[T.BITS] && tags[T.BITS][0]) || 8;
   const comp = (tags[T.COMPRESSION] && tags[T.COMPRESSION][0]) || 1;
   const photo = (tags[T.PHOTOMETRIC] && tags[T.PHOTOMETRIC][0]) ?? 1;

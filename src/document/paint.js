@@ -116,6 +116,7 @@ export class Paint {
       const nt = dst.getTile(t.tx, t.ty, true);
       nt.data = t.data;               // اشتراک تا اولین نوشتن
       nt._cowShared = true;           // پرچم: این کاشی مشترک است
+      t._cowShared = true;            // پرچم: کاشی مبدأ هم مشترک است
     }
   }
 

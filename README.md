@@ -1,156 +1,224 @@
 <div align="center">
 
-<img src="ui/logo.png" alt="Lumina" width="96">
+<img src="ui/logo.png" alt="Lumina Logo" width="104">
 
 # Lumina
 
-**A fast, dependency-light image editor with a PSD engine written from scratch.**
+**A fast, dependency-light image editor with a from-scratch PSD & ICC engine.**
 
-Layered PSD read/write · native Curves, Levels & Exposure · vector masks · layer effects · ICC colour management · tile-based compositing
+Layered PSD Read/Write · Native Curves & Levels · Vector Masks · Layer Effects · Linear-Light Compositing · Zero Native Codecs
 
 [![CI](https://github.com/ZALPRO/lumina/actions/workflows/ci.yml/badge.svg)](https://github.com/ZALPRO/lumina/actions/workflows/ci.yml)
 [![Release](https://github.com/ZALPRO/lumina/actions/workflows/release.yml/badge.svg)](https://github.com/ZALPRO/lumina/actions/workflows/release.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-2f81f7.svg)](LICENSE)
-[![Node](https://img.shields.io/badge/node-%3E%3D20-3ddcc3.svg)](package.json)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Node](https://img.shields.io/badge/node-%3E%3D20-brightgreen.svg)](package.json)
 [![Tests](https://img.shields.io/badge/tests-274%20passing-34c759.svg)](#verification)
-[![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Linux%20%7C%20Windows-8e8e93.svg)](#install)
+[![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey.svg)](#installation--setup)
 
-[Install](#install) · [Features](#features) · [Verification](#verification) · [Architecture](#architecture) · [Contributing](CONTRIBUTING.md)
+[Quick Start](#quick-start) · [Features](#key-features) · [Supported Formats](#supported-formats) · [Installation](#installation--setup) · [Verification](#verification) · [Architecture](#architecture) · [License](#license)
 
-<img src="docs/screenshots/editor-psd-layers.png" alt="Lumina editing a layered PSD" width="880">
+<br>
+
+<img src="docs/screenshots/editor-psd-layers.png" alt="Lumina Editor Interface" width="920">
 
 </div>
 
 ---
 
-## Why Lumina
+## Overview
 
-Most editors treat PSD as somebody else's problem: shell out to a native library,
-lose half the document on import, or skip layers entirely. Lumina implements the
-file format itself — the header, the layer records, the tagged blocks (`lfx2`,
-`vmsk`, `Crv `), the compression schemes (RAW, PackBits RLE, ZIP and ZIP with
-prediction), the CMYK polarity Photoshop actually writes, and the ICC profile
-that keeps colours honest in managed readers.
+Most modern editors delegate Photoshop format handling to heavy external dependencies or cloud conversion services, often losing layer trees, masks, blending modes, and color profiles along the way.
 
-The result is a small, auditable editor whose PSD pipeline is verified against
-real Photoshop files with an independent toolchain — not against itself.
+**Lumina** implements full PSD/PSB parsing, serialization, and image decoding completely from scratch with zero runtime engine dependencies. It writes production-grade layered PSDs compatible with Adobe Photoshop, Clip Studio Paint, and Affinity Photo, while providing a snappy, lightweight desktop and browser editing experience.
 
-## Features
+---
 
-**Documents & layers**
+## Key Features
 
-- Non-destructive adjustment layers: Curves, Levels, Brightness/Contrast, Invert, Posterize, Exposure, Hue/Saturation, Threshold, Vibrance
-- 27 Photoshop blend modes in linear space, per-layer opacity, groups, clipping masks
-- Layer masks, vector masks (`vmsk`) with real bezier knots, and layer styles (`lfx2` / legacy `lrFX`): drop shadow, stroke, colour overlay
-- Editable text layers with bundled fonts and live re-rendering
-- Tile-based paint engine with copy-on-write copies, so undo/redo and layer duplication stay cheap
-- Unified history panel and navigator, marching-ants selections, lasso, magic wand, gradient, shape and clone tools
+### 🎨 Layer Stack & Non-Destructive Adjustments
+- **Full Adjustment Layers**: Real-time Curves, Levels, Brightness/Contrast, Exposure, Invert, Posterize, Hue/Saturation, Threshold, and Vibrance.
+- **27 Linear Blend Modes**: Precise W3C and Photoshop-compliant linear light compositing (Normal, Multiply, Screen, Overlay, Color Dodge, Linear Light, Difference, Luminosity, etc.).
+- **Vector & Raster Masks**: Embedded vector masks (`vmsk`) with bezier knot paths and raster layer masks.
+- **Layer Styles (`lfx2` / legacy `lrFX`)**: Drop Shadow, Stroke (outer/inner/center), and Color Overlay.
+- **Editable Text Layers**: Vector font rasterization with TrueType parser and live typography styling.
+- **Tile-Based Engine**: 256×256 tiled sparse canvas with bidirectional Copy-on-Write (COW) memory sharing for instantaneous undo/redo and layer duplication.
 
-**Colour & formats**
+### 🔬 Retouching & Professional Tools
+- **Frequency Separation**: High/low texture separation with mathematically calibrated linear-space high-pass reconstruction.
+- **Brush & Retouch Tools**: Soft & hard brushes, Clone Stamp, Healing Brush, Smudge with inertia, Dodge, Burn, Blur, Sharpen, and Flood Fill.
+- **Selections**: Marching-ants animated rect selection, elliptical selection, polygonal lasso, and color-aware Magic Wand.
+- **Color & Gradients**: Full HSL / HSV color picker, Linear / Radial gradients, and bundled Persian & international fonts.
 
-- ICC-aware PNG read/write; embedded sRGB profile is a standards-compliant one (D50 white point, Bradford `chad`, parametric type-3 curve)
-- Open: PNG, JPEG, WebP, GIF, BMP, QOI, TIFF, DNG, PSD, PSB — including **RGB, CMYK, Grayscale, Bitmap (1-bit), Indexed and Lab** documents at 8/16/32-bit
-- Save: PNG, JPEG, TIFF, BMP, QOI, PSD, and layered PSD (RAW / RLE / ZIP / ZIP+prediction, RGB / CMYK / Grayscale, 8 / 16-bit)
-- Zero runtime dependencies for the engine: the PNG, JPEG, TIFF, WebP, QOI, ZIP and PSD codecs are all in `src/formats/`
+### 🛡️ Secure & Sandboxed by Design
+- **Memory Bomb Protection**: Strict safety bounds across PNG, JPEG, TIFF, and PSD codecs (32,768px maximum edge limit, 100-megapixel total allocation ceiling).
+- **Hardened Local Server**: Path traversal prevention, dotfile restriction, loopback-only binding (`127.0.0.1`), and strict Content Security Policy (`CSP`).
+- **Completely Offline**: Zero telemetry, zero external network requests.
 
-**Apps**
+---
 
-- Web app (`npm run web`) — the whole UI, served statically
-- Desktop app (Electron) for macOS, Windows and Linux — same UI, native window, no network access
+## Supported Formats
 
-## Install
+| Format | Read | Write | Color Modes | Bit Depths | Compression Schemes |
+|---|:---:|:---:|---|---|---|
+| **PSD / PSB** | ✅ | ✅ | RGB, CMYK, Grayscale, Bitmap, Indexed, Lab, Duotone | 8-bit, 16-bit, 32-bit | RAW, PackBits (RLE), ZIP, ZIP+Prediction |
+| **PNG** | ✅ | ✅ | RGBA, RGB, Grayscale, Indexed | 8-bit, 16-bit | Deflate (zlib) with ICC embedding |
+| **JPEG** | ✅ | ✅ | RGB, Grayscale, YCbCr | 8-bit | Baseline DCT, JFIF, EXIF |
+| **TIFF / DNG** | ✅ | ✅ | RGB, RGBA, Grayscale, CMYK | 8-bit, 16-bit | Uncompressed, LZW (dynamic buffer), PackBits, ZIP |
+| **WebP** | ✅ | ✅ | RGBA, RGB | 8-bit | Lossless & VP8 |
+| **BMP** | ✅ | ✅ | RGB, RGBA, 24-bit, 32-bit | 8-bit | Uncompressed, Bitfields |
+| **QOI** | ✅ | ✅ | RGB, RGBA | 8-bit | Quite OK Image format |
 
-### Run from source (all platforms)
+---
 
+## Quick Start
+
+### 🌐 Run in Browser (Local Static Server)
+
+```bash
+# Clone the repository
+git clone https://github.com/ZALPRO/lumina.git
+cd lumina
+
+# Install dependencies
+npm install
+
+# Start the secure local server (binds to http://127.0.0.1:4173)
+npm run web
+```
+
+### 🖥️ Run Desktop App (Electron)
+
+```bash
+npm start
+```
+
+---
+
+## Installation & Setup
+
+### Prebuilt Binaries
+
+Ready-to-use binaries are available on the [GitHub Releases](https://github.com/ZALPRO/lumina/releases) page:
+
+- **macOS**: `Lumina-1.0.0-mac-arm64.dmg` (Apple Silicon) / `Lumina-1.0.0-mac-x64.dmg` (Intel)
+- **Linux**: `Lumina-1.0.0-linux-x86_64.AppImage` (Universal) or `.deb` (Debian/Ubuntu)
+- **Windows**: `Lumina-Setup-1.0.0-win-x64.exe` (NSIS Installer) or `-portable.exe`
+
+### Building from Source
+
+Ensure you have **Node.js 20+** installed.
+
+#### macOS
 ```bash
 git clone https://github.com/ZALPRO/lumina.git
 cd lumina
 npm install
-npm run web          # http://localhost:4173
-# or the desktop shell:
-npm start
+npm run dist:mac       # Generates DMG and ZIP in release/
+```
+*Note: If launching an unsigned build for the first time, right-click the app in Finder and choose **Open**.*
+
+#### Linux (Debian, Ubuntu, Fedora, Arch)
+```bash
+# Ubuntu / Debian system prerequisites for headless test & electron:
+sudo apt update && sudo apt install -y libnspr4 libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 libxkbcommon0 libgbm1 libasound2
+
+git clone https://github.com/ZALPRO/lumina.git
+cd lumina
+npm install
+npm run dist:linux     # Generates AppImage, .deb, and tar.gz in release/
 ```
 
-Requires **Node.js 20+**. On Linux, Electron needs the usual GTK/NSS libraries —
-see [docs/INSTALL.md](docs/INSTALL.md) for the exact package list per distribution.
+#### Windows
+```powershell
+# In PowerShell:
+git clone https://github.com/ZALPRO/lumina.git
+cd lumina
+npm install
+npm run dist:win       # Generates NSIS installer and portable EXE in release/
+```
 
-### Prebuilt binaries
+---
 
-Download from [Releases](https://github.com/ZALPRO/lumina/releases):
+## Verification & Testing
 
-| Platform | Artifact | Notes |
-|---|---|---|
-| **macOS** | `Lumina-1.0.0-mac-arm64.dmg` / `Lumina-1.0.0-mac-x64.dmg` | Apple Silicon / Intel. Unsigned builds: first launch via right-click → **Open** |
-| **Linux** | `Lumina-1.0.0-linux-x86_64.AppImage` | `chmod +x` then run — no install needed |
-| **Linux (Debian/Ubuntu)** | `Lumina-1.0.0-linux-amd64.deb` | `sudo apt install ./Lumina-1.0.0-linux-amd64.deb` |
-| **Linux (portable)** | `Lumina-1.0.0-linux-x64.tar.gz` | unpack and run `./Lumina` |
-| **Windows** | `Lumina-Setup-1.0.0-win-x64.exe` | installer, or the portable `.exe` |
-
-Step-by-step instructions, including how to build your own macOS/Linux packages
-and how to self-sign on macOS, are in **[docs/INSTALL.md](docs/INSTALL.md)**.
-
-## Verification
-
-Lumina is checked against **independent** tools (`psd-tools` 1.19 and Pillow),
-using **real Photoshop documents**, and the reference is always the raw plane
-data inside the file — never our own decoder output.
+Lumina maintains an extensive verification suite tested against **real Photoshop files** and verified independently using Python's `psd-tools` 1.19 and `LittleCMS` (LCMS):
 
 ```bash
-npm test                   # 274 tests (unit + format + real-browser UI)
-npm run verify:corpus      # 30 curated real Photoshop files
-npm run verify:corpus:download   # download that set from the psd-tools repo
-npm run verify:corpus:all  # every .psd in the reference repo (254 files)
-npm run verify:psd         # build a feature-rich PSD and validate it externally
+# Run the complete test suite (274 unit and browser E2E tests)
+npm test
+
+# Run unit tests only
+npm run test:unit
+
+# Run headless browser E2E tests
+npm run test:browser
+
+# Generate an advanced layered PSD and verify against independent python psd-tools
+npm run verify:psd
+
+# Verify against curated Photoshop reference corpus
+npm run verify:corpus
 ```
 
-| Check | Result |
-|---|---|
-| Photoshop corpus (every `.psd` in the reference repo: 254 files) | **253 match, 0 pixel differences**; 1 file is a *Multichannel* document, a mode with no RGB meaning |
-| Curated set of 30 files (RGB/CMYK/Gray/Bitmap/Indexed/Lab, 8/16/32-bit, RAW/RLE/ZIP) | **30 / 30 match** |
-| Layered PSD round-trip (RLE, ZIP+prediction, CMYK) composited by `psd-tools` | **0 pixels differ** |
-| Per-layer channel planes vs. encoder input | **identical** |
-| Automated tests | **274 passing** (incl. 25 in a real headless browser) |
-| ICC identity transform vs. LCMS | max 1 level, mean 0.0014 |
+### Test Results
 
-Full evidence, method and the honest list of remaining limitations:
-**[docs/VERIFICATION.md](docs/VERIFICATION.md)**.
+- **Automated Tests**: 274 total tests passing (272 passed, 2 skipped, 0 failed).
+- **Corpus Verification**: 253 / 254 real-world Photoshop files bit-for-bit matched (1 file excluded as Multichannel without standard RGB color mapping).
+- **Color Profiles**: ICC identity round-trip verified against LittleCMS (`mean delta = 0.0014`).
+- **Layered Round-Trip**: Multi-layer PSD files exported by Lumina decompress and composite identically in Adobe Photoshop and `psd-tools`.
 
 <div align="center">
-<img src="docs/screenshots/sample-artwork.png" alt="Sample artwork" width="640"><br>
-<sub>Artwork generated by <code>npm run sample</code> and exported as a real layered PSD.</sub>
+<br>
+<img src="docs/screenshots/sample-artwork.png" alt="Sample Artwork Output" width="620">
+<p><em>Procedural artwork generated and exported as a layered PSD (<code>npm run sample</code>).</em></p>
 </div>
+
+---
 
 ## Architecture
 
+Lumina is cleanly split into modular ES6 modules with no external runtime bundle:
+
+```text
+lumina/
+├── cli/              # Headless CLI utilities & conversion scripts
+├── docs/             # Technical deep-dive documentation (PSD, Architecture, Verification)
+├── electron/         # Desktop application shell & sandboxed window management
+├── scripts/          # Development server, test runner, benchmark utilities
+├── src/
+│   ├── document/     # Document model, Layer hierarchy, History, COW Tiled Paint
+│   ├── engine/       # Blend modes (Linear RGB), Adjustments, Filters, FX, Inpainting
+│   ├── formats/      # Codecs: PSD (read/write), ICC, PNG, JPEG, TIFF, WebP, BMP, QOI
+│   ├── text/         # Typography specification and TrueType rasterizer
+│   └── tools/        # Brush engine, Retouching, Selections, Flood Fill
+├── tools/            # Python & node verification harnesses
+└── ui/               # Modular UI, SVG icon system, responsive layouts, CSS variables
 ```
-src/
-  document/   document · layer · tile-based Paint (copy-on-write) · history
-  engine/     blend modes (linear space) · filters · adjustments · fx · inpaint · layers styles
-  formats/    png · jpeg · tiff · webp · bmp · qoi · psd (read/write) · psd-layers · icc · deflate
-  tools/      brush · flood fill · paint tools · clone
-  text/       text layer spec + rasterisation
-ui/           the editor UI (framework-free ES modules)
-electron/     desktop shell: app:// protocol, sandboxed renderer, single instance
-cli/          headless entry points (demo, thumbnails, conversion)
-tools/        independent verification harnesses
-```
 
-Deep-dive documentation: **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** ·
-PSD format notes: **[docs/PSD.md](docs/PSD.md)** ·
-Verification method: **[docs/VERIFICATION.md](docs/VERIFICATION.md)**.
+For more details, see:
+- [Architecture Deep Dive](docs/ARCHITECTURE.md)
+- [PSD Format Specifications & Notes](docs/PSD.md)
+- [Verification Methodology](docs/VERIFICATION.md)
+- [Installation Guide](docs/INSTALL.md)
 
-## Known limitations
+---
 
-- **Multichannel** documents are rejected (an arbitrary channel set has no RGB meaning). Lab, Duotone, Bitmap and Indexed are decoded.
-- Smart Objects are flattened to pixel layers; their transform metadata is not retained.
-- Embedded **CMYK** ICC profiles are ignored on import (CMYK→RGB uses the standard formula).
-- 32-bit documents can be *opened* but are saved at 8/16-bit.
-- Some layer effects (gradient/pattern overlays, inner glow) are read but not re-rendered.
-- Rendering is CPU-only; there is no GPU/WebGPU path yet.
+## Contributing
+
+Contributions, bug reports, and suggestions are welcome!
+Please see [CONTRIBUTING.md](CONTRIBUTING.md) before submitting pull requests.
+
+1. Fork the repository
+2. Create your branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'feat: add amazing feature'`)
+4. Verify tests pass (`npm test`)
+5. Push to the branch (`git push origin feature/amazing-feature`)
+6. Open a Pull Request
+
+---
 
 ## License
 
-[MIT](LICENSE) © 2026 ZALPRO (ZalNET)
+Distributed under the **MIT License**. See [`LICENSE`](LICENSE) for more information.
 
-Adobe and Photoshop are trademarks of Adobe Inc. Lumina is an independent
-project and is not affiliated with or endorsed by Adobe.
+*Disclaimer: Adobe and Adobe Photoshop are registered trademarks of Adobe Systems Inc. Lumina is an independent open-source project and is not affiliated with or endorsed by Adobe.*

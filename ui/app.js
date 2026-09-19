@@ -330,7 +330,7 @@ canvas.addEventListener('pointerdown', (e) => {
   } else if (state.tool === 'move') {
     // جابه‌جایی لایهٔ انتخابی: شروع درگ
     state.moveStart = [x, y];
-    state.moveOrigO = l.offset();
+    state.moveOrigO = l.offset;
     canvas.setPointerCapture(e.pointerId);
   } else if (state.tool === 'wand') {
     // عصای جادویی: انتخاب ماسک بر اساس ناحیهٔ هم‌رنگ
@@ -419,7 +419,13 @@ canvas.addEventListener('pointermove', (e) => {
 
 window.addEventListener('pointerup', (e) => {
   state.drawingTarget = null;
-  if (state.moveStart && state.tool === 'move') state.moveStart = null;
+  if (state.moveStart && state.tool === 'move') {
+    const l = state.selectedLayer;
+    if (l && state.moveOrigO && (l.ox !== state.moveOrigO[0] || l.oy !== state.moveOrigO[1])) {
+      state.history?.recordDoc(state.doc, 'Move Layer');
+    }
+    state.moveStart = null;
+  }
   if (state.strokeActive) {
     state.strokeActive = null;
     render();
@@ -470,27 +476,31 @@ function paintAt(x, y) {
   const l = state.selectedLayer;
   if (!l || !l.paint) return;
   const paint = state.drawingTarget || l.paint;
+  const ox = state.drawingTarget ? 0 : (l.ox || 0);
+  const oy = state.drawingTarget ? 0 : (l.oy || 0);
+  const lx = x - ox;
+  const ly = y - oy;
   const shape = state.brush.shape || 'round';
   const stampFn = shape === 'square' ? squareStamp : brushStamp;
   const r = state.brush.size / 2;
   if (state.tool === 'eraser') {
     if (shape === 'square') {
       // پاک‌کن مربعی: پوشش مربع را از آلفا کم کن
-      eraseAt(paint, x, y, state.brush.size / 2, state.brush.hard, true);
+      eraseAt(paint, lx, ly, state.brush.size / 2, state.brush.hard, true);
     } else {
-      eraseAt(paint, x, y, state.brush.size / 2, state.brush.hard);
+      eraseAt(paint, lx, ly, state.brush.size / 2, state.brush.hard);
     }
   } else if (state.tool === 'pencil') {
-    pencilStamp(paint, x, y, r, state.color, state.brush.flow * state.brush.alpha);
+    pencilStamp(paint, lx, ly, r, state.color, state.brush.flow * state.brush.alpha);
   } else if (state.tool === 'dodge' || state.tool === 'burn') {
     const exposure = state.tool === 'dodge' ? Math.max(0.05, state.retouchStrength || state.brush.flow) : -Math.max(0.05, state.retouchStrength || state.brush.flow);
-    dodgeBurnStamp(paint, x, y, r, state.brush.hard, exposure, state.range || 'midtones');
+    dodgeBurnStamp(paint, lx, ly, r, state.brush.hard, exposure, state.range || 'midtones');
   } else if (state.tool === 'blur') {
-    blurStamp(paint, state.doc.width, state.doc.height, x, y, r, state.brush.hard, Math.round((state.retouchStrength || 1) * 3));
+    blurStamp(paint, state.doc.width, state.doc.height, lx, ly, r, state.brush.hard, Math.round((state.retouchStrength || 1) * 3));
   } else if (state.tool === 'sharpen') {
-    sharpenStamp(paint, state.doc.width, state.doc.height, x, y, r, state.brush.hard, 0.3 + (state.retouchStrength || 0.5) * 0.7);
+    sharpenStamp(paint, state.doc.width, state.doc.height, lx, ly, r, state.brush.hard, 0.3 + (state.retouchStrength || 0.5) * 0.7);
   } else {
-    stampFn(paint, x, y, r, state.brush.hard,
+    stampFn(paint, lx, ly, r, state.brush.hard,
       state.color, state.brush.flow * state.brush.alpha);
   }
   invalidateRect({ x: x - state.brush.size, y: y - state.brush.size, w: state.brush.size * 2, h: state.brush.size * 2 });
@@ -522,18 +532,21 @@ function retouchAt(x, y, prevX, prevY) {
   const act = state.strokeActive;
   if (!act) return;
   const p = act.paint;
+  const l = state.selectedLayer;
+  const lox = (l && l.ox) || 0, loy = (l && l.oy) || 0;
+  const lx = x - lox, ly = y - loy;
   const r = state.brush.size / 2;
   const src = state.cloneSnap || p;
   if (act.type === 'clone') {
-    cloneStamp(src, p, x, y, r, state.brush.hard, act.offx, act.offy, state.brush.flow);
+    cloneStamp(src, p, lx, ly, r, state.brush.hard, act.offx, act.offy, state.brush.flow);
   } else if (act.type === 'healing') {
-    healingStamp(src, p, x, y, r, state.brush.hard, act.offx, act.offy, state.brush.flow);
+    healingStamp(src, p, lx, ly, r, state.brush.hard, act.offx, act.offy, state.brush.flow);
   } else if (act.type === 'smudge') {
     const ddx = x - (prevX ?? x), ddy = y - (prevY ?? y);
     if (Math.hypot(ddx, ddy) < 0.5) return;
-    const { snap, ox, oy } = snapshotRect(p, x, y, r + 2);
+    const { snap, ox, oy } = snapshotRect(p, lx, ly, r + 2);
     const len = Math.max(1, Math.hypot(ddx, ddy));
-    smudgeStamp(snap, p, x - ox, y - oy, r, state.brush.hard, ddx / len, ddy / len, 0.6 * state.brush.flow);
+    smudgeStamp(snap, p, lx, ly, r, state.brush.hard, ddx / len, ddy / len, 0.6 * state.brush.flow, ox, oy);
   }
   invalidateRect({ x: x - state.brush.size, y: y - state.brush.size, w: state.brush.size * 2, h: state.brush.size * 3 });
   render();
@@ -1468,16 +1481,29 @@ $('#btn-apply-filter').addEventListener('click', () => {
     if (typeof toast === 'function') toast(`Auto Retouch: ${nsp} blemishes healed`);
   }
   else if (kind === 'freqsep') {
-    // ─── Frequency Separation: سخت‌ترین کار فتوشاپ، یک‌کلیکی ───
-    const { low, high } = frequencySeparate(frame, w, h, 8);
+    // ─── Frequency Separation: تفکیک فرکانس دقیق و سازگار با کامپوزیتور خطی ───
+    state.history.recordDoc(state.doc, 'Frequency Separation');
+    const { low } = frequencySeparate(frame, w, h, 8);
     // لایهٔ فعلی = low، و یک لایهٔ High Frequency با Linear Light رویش
     l.paint.clear();
     l.paint.writeFromRGBA(low, w, h);
     l.blendMode = 'normal';
     l.name = ((l.name.match(/^[^(]+/) || [l.name])[0]).trim() + ' (Low Freq)';
+
+    // محاسبه فرکانس بالا منطبق با فضای خطی کامپوزیتور
+    const hiData = new Uint8ClampedArray(w * h * 4);
+    for (let i = 0; i < frame.length; i += 4) {
+      const slr = srgbToLinear(frame[i] / 255), slg = srgbToLinear(frame[i + 1] / 255), slb = srgbToLinear(frame[i + 2] / 255);
+      const llr = srgbToLinear(low[i] / 255), llg = srgbToLinear(low[i + 1] / 255), llb = srgbToLinear(low[i + 2] / 255);
+      hiData[i] = Math.round(linearToSrgb(Math.max(0, Math.min(1, (slr - llr) / 2 + 0.5))) * 255);
+      hiData[i + 1] = Math.round(linearToSrgb(Math.max(0, Math.min(1, (slg - llg) / 2 + 0.5))) * 255);
+      hiData[i + 2] = Math.round(linearToSrgb(Math.max(0, Math.min(1, (slb - llb) / 2 + 0.5))) * 255);
+      hiData[i + 3] = frame[i + 3];
+    }
+
     const hi = new Layer({
       name: (l.name.split(' (Low')[0]) + ' (High Freq)',
-      paint: (() => { const p = new Paint(w, h); p.writeFromRGBA(high, w, h); return p; })(),
+      paint: (() => { const p = new Paint(w, h); p.writeFromRGBA(hiData, w, h); return p; })(),
       blendMode: 'linearLight',
       opacity: 1,
     });
@@ -1564,7 +1590,6 @@ $('#btn-save').addEventListener('click', async () => {
   const fmt = state.exportFormat || 'png';
   const frame = state.doc.toRGBA();
   const embed = state.embedICC !== false;
-  const buf = await encodePng({ width: state.doc.width, height: state.doc.height, data: frame }, { icc: embed ? srgbProfile() : null });
   if (fmt === 'psd') {
     if (state.layeredPSD !== false) {
       const b = await encodeLayeredPSD(state.doc, { composite: frame, icc: embed ? srgbProfile() : null, ...layeredPSDOptions() });
@@ -1590,6 +1615,7 @@ $('#btn-save').addEventListener('click', async () => {
     const b = await encodeWebP(frame, state.doc.width, state.doc.height, 0.92);
     downloadBlob(new Blob([b], { type: 'image/webp' }), (state.doc.name || 'lumina') + '.webp');
   } else {
+    const buf = await encodePng({ width: state.doc.width, height: state.doc.height, data: frame }, { icc: embed ? srgbProfile() : null });
     downloadBlob(new Blob([buf], { type: 'image/png' }), (state.doc.name || 'lumina') + '.png');
   }
 });
@@ -1935,11 +1961,11 @@ function extractFontFamily(buf) {
     const bytes = u8.subarray(strOff + offset, strOff + offset + len);
     let s;
     if (platformId === 3 || platformId === 0) {
-      s = String.fromCharCode(...bytes);
-    } else {
       s = new TextDecoder('utf-16be').decode(bytes);
+    } else {
+      s = String.fromCharCode(...bytes);
     }
-    s = s.split('\0')[0].trim();
+    s = s.replace(/\0/g, '').trim();
     if (s && !family) family = s;
   }
   return family || 'CustomFont';
