@@ -1,0 +1,122 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to build (e.g. v1.0.0)'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux
+            os: ubuntu-latest
+            command: npx electron-builder --linux --publish never
+            artifact: linux-dist
+          - name: macos
+            os: macos-latest
+            command: npx electron-builder --mac --publish never
+            artifact: macos-dist
+          - name: windows
+            os: windows-latest
+            command: npx electron-builder --win --publish never
+            artifact: windows-dist
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Run tests before packaging
+        run: npm test
+
+      - name: Build packages
+        run: ${{ matrix.command }}
+        env:
+          # Optional signing: set these repository secrets if you own certificates.
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # Builds stay unsigned when no secrets are configured.
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+      - name: List artifacts
+        shell: bash
+        run: ls -lh release/ || true
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: |
+            release/*.AppImage
+            release/*.deb
+            release/*.tar.gz
+            release/*.dmg
+            release/*.zip
+            release/*.exe
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    name: Publish GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all packages
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: Flatten
+        run: |
+          mkdir -p out
+          find dist -type f -maxdepth 2 -exec cp {} out/ \;
+          ls -lh out/
+
+      - name: Determine tag
+        id: tag
+        run: echo "tag=${{ github.event.inputs.tag || github.ref_name }}" >> "$GITHUB_OUTPUT"
+
+      - name: Create / update release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: Lumina ${{ steps.tag.outputs.tag }}
+          draft: false
+          generate_release_notes: true
+          files: out/*
+          body: |
+            ## Downloads
+
+            | Platform | File | How to run |
+            |---|---|---|
+            | macOS (Apple Silicon) | `Lumina-*-mac-arm64.dmg` | right-click → Open the first time (unsigned build) |
+            | macOS (Intel) | `Lumina-*-mac-x64.dmg` | same |
+            | Linux (any) | `Lumina-*-linux-x86_64.AppImage` | `chmod +x` and run |
+            | Linux (Debian/Ubuntu) | `Lumina-*-linux-amd64.deb` | `sudo apt install ./Lumina-*-linux-amd64.deb` |
+            | Linux (portable) | `Lumina-*-linux-x64.tar.gz` | unpack and run `./lumina` |
+            | Windows | `Lumina-Setup-*-win-x64.exe` / `Lumina-*-portable.exe` | run; SmartScreen → More info → Run anyway |
+
+            Full instructions: [docs/INSTALL.md](https://github.com/${{ github.repository }}/blob/main/docs/INSTALL.md).
+            Verification evidence: [docs/VERIFICATION.md](https://github.com/${{ github.repository }}/blob/main/docs/VERIFICATION.md).

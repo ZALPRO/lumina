@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 🔐 Report a security vulnerability
+    url: https://github.com/ZALPRO/lumina/security/advisories/new
+    about: Please report crashes, hangs and file-parsing vulnerabilities privately, not as public issues.
+  - name: 📖 Documentation
+    url: https://github.com/ZALPRO/lumina/blob/main/docs/INSTALL.md
+    about: Install, build and troubleshooting instructions for macOS, Linux and Windows.
+  - name: 🔬 Verification method
+    url: https://github.com/ZALPRO/lumina/blob/main/docs/VERIFICATION.md
+    about: How PSD output is validated against independent tools, and how to reproduce it.

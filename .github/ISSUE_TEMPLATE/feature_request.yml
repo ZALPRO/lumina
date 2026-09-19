@@ -1,0 +1,48 @@
+name: 💡 Feature request
+description: Suggest a capability, format or workflow
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before you file
+      options:
+        - label: I checked the roadmap and open issues; this is not already planned
+          required: true
+        - label: I am willing to help test or implement it
+          required: false
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - PSD / PSB support (read or write)
+        - Colour management (ICC, CMYK, Lab)
+        - Formats (import / export)
+        - UI and workflow
+        - Performance
+        - Desktop packaging / platform support
+        - Developer tooling / verification
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: Describe the workflow that is painful today, not the implementation you have in mind.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behaviour
+      description: What should happen? Links to the Adobe spec or to how other editors do it help a lot.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+    validations:
+      required: false

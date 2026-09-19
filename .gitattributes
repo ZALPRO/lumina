@@ -1,0 +1,23 @@
+* text=auto eol=lf
+
+*.js    text
+*.mjs   text
+*.json  text
+*.md    text
+*.yml   text
+*.yaml  text
+*.html  text
+*.css   text
+*.sh    text eol=lf
+
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.webp  binary
+*.ttf   binary
+*.woff2 binary
+*.psd   binary
+*.psb   binary
+
+# keep the generated diff quiet for lockfiles
+package-lock.json -diff linguist-generated=false

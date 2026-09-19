@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+  @font-face { font-family:"Anton"; src:url("fonts/anton.ttf") format("truetype"); font-display:block; }
+  @font-face { font-family:"Vazirmatn"; src:url("fonts/vazirmatn.ttf") format("truetype"); font-display:block; }
+  body { margin:0; }
+</style>
+</head>
+<body>
+<script>
+const load = (u) => new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = () => rej(new Error('img load failed')); im.src = u; });
+
+// رندر تامنیل حرفه‌ای یوتیوب:
+//   دو سوژه (چهره + غذا) + عنوان فارسی/انگلیسی + استروک + سایه
+window.renderThumb = async ({ bgUrl, subjUrl, foodUrl, title = '', sub = '', titleFa = true, brand = '' }) => {
+  const W = 1280, H = 720;
+  const c = document.createElement('canvas'); c.width = W; c.height = H;
+  const g = c.getContext('2d');
+
+  const bg = await load(bgUrl);
+
+  // 1) پس‌زمینه: پوشش کامل + بلور + تیره + اشباع
+  g.filter = 'blur(30px) brightness(0.42) saturate(1.45)';
+  g.drawImage(bg, 0, 0, W, H);
+  g.filter = 'none';
+
+  // وینیت (تیره‌شدن لبه‌ها)
+  const vg = g.createRadialGradient(W/2, H/2, H*0.25, W/2, H/2, H*0.95);
+  vg.addColorStop(0, 'rgba(0,0,0,0)');
+  vg.addColorStop(1, 'rgba(0,0,0,0.5)');
+  g.fillStyle = vg; g.fillRect(0,0,W,H);
+
+  // 2) غذا: سمت چپ-وسط، بزرگ (~58% ارتفاع) با سایه
+  if (foodUrl) {
+    const food = await load(foodUrl);
+    const fh = Math.round(H * 0.56);
+    const fw = Math.round(fh * food.width / food.height);
+    const fx = 70, fy = Math.round((H - fh) / 2) + 10;
+    g.save();
+    g.shadowColor = 'rgba(0,0,0,0.6)'; g.shadowBlur = 46; g.shadowOffsetX = 0; g.shadowOffsetY = 12;
+    g.drawImage(food, fx, fy, fw, fh);
+    g.restore();
+    // قاب براق دور غذا
+    g.strokeStyle = 'rgba(255,255,255,0.25)'; g.lineWidth = 8;
+    g.strokeRect(fx-14, fy-14, fw+28, fh+28);
+  }
+
+  // 3) چهره یوتیوبر: راست-وسط، بزرگ با سایه
+  const subj = await load(subjUrl);
+  const sh = Math.round(H * 0.62);
+  const sw = Math.round(sh * subj.width / subj.height);
+  const sx = W - sw - 60;
+  const sy = Math.round((H - sh) / 2) - 8;
+  g.save();
+  g.shadowColor = 'rgba(0,0,0,0.6)'; g.shadowBlur = 46; g.shadowOffsetX = 0; g.shadowOffsetY = 12;
+  g.drawImage(subj, sx, sy, sw, sh);
+  g.restore();
+
+  // 4) گرادیان پایین برای متن
+  const gr = g.createLinearGradient(0, H*0.45, 0, H);
+  gr.addColorStop(0, 'rgba(0,0,0,0)');
+  gr.addColorStop(1, 'rgba(0,0,0,0.8)');
+  g.fillStyle = gr; g.fillRect(0, H*0.45, W, H*0.55);
+
+  // 5) عنوان اصلی
+  const fontFamily = titleFa ? 'Vazirmatn, "Vazirmatn", sans-serif' : 'Anton, "Anton", sans-serif';
+  let fs = titleFa ? 96 : 150;
+  const titleText = title.toUpperCase();
+  g.font = `${fs}px ${fontFamily}`;
+  function fitWidth(maxW) {
+    while (g.measureText(titleText).width > maxW && fs > 40) { fs -= 4; g.font = `${fs}px ${fontFamily}`; }
+  }
+  fitWidth(titleFa ? 900 : 900);
+  g.textBaseline = 'alphabetic';
+  g.lineJoin = 'round'; g.lineCap = 'round';
+  const tx = 64, ty = H - 52;
+  g.strokeStyle = '#000'; g.lineWidth = Math.round(fs * 0.18);
+  g.strokeText(titleText, tx, ty);
+  g.fillStyle = '#ffd400';
+  g.fillText(titleText, tx, ty);
+
+  // 6) زیرنویس (ضربهٔ دوم)
+  if (sub) {
+    g.font = titleFa ? `700 44px Vazirmatn, sans-serif` : `700 46px Inter, sans-serif`;
+    g.lineWidth = 10; g.strokeStyle = 'rgba(0,0,0,0.85)';
+    g.strokeText(sub, tx, ty - fs * 0.8);
+    g.fillStyle = '#ffffff';
+    g.fillText(sub, tx, ty - fs * 0.8);
+  }
+
+  // 7) نشان برند کوچک (گوشه)
+  if (brand) {
+    g.font = `700 30px Vazirmatn, sans-serif`;
+    g.lineWidth = 7; g.strokeStyle = 'rgba(0,0,0,0.7)';
+    g.strokeText(brand, tx, 46);
+    g.fillStyle = '#ffffff';
+    g.fillText(brand, tx, 46);
+  }
+
+  return c.toDataURL('image/png');
+};
+</script>
+</body>
+</html>

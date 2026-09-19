@@ -1,0 +1,36 @@
+# ---- dependencies ----
+node_modules/
+.npm/
+.pnpm-store/
+
+# ---- build output ----
+release/
+dist/
+build/
+out/
+*.tsbuildinfo
+
+# ---- runtime artifacts ----
+*.log
+npm-debug.log*
+yarn-error.log*
+.DS_Store
+Thumbs.db
+
+# ---- editors ----
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.swp
+
+# ---- test artifacts (fixtures are tracked, generated data is not) ----
+test/ref/qoi_ref_cli
+test/ref/*.qoi
+test/ref/*.raw
+test/ref/*.pix
+test/ref/qoi_ref_cli.exe
+
+# ---- local verification output ----
+corpus/
+.corpus/
+*.local.md

@@ -1,0 +1,146 @@
+{
+  "name": "lumina-editor",
+  "productName": "Lumina",
+  "version": "1.0.0",
+  "description": "A fast, dependency-light image editor with a from-scratch PSD/ICC engine — layered PSD read/write, native Curves/Levels, vector masks and layer effects.",
+  "type": "module",
+  "main": "electron/main.js",
+  "license": "MIT",
+  "author": {
+    "name": "ZALPRO (ZalNET)",
+    "url": "https://github.com/ZALPRO"
+  },
+  "homepage": "https://github.com/ZALPRO/lumina#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ZALPRO/lumina.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ZALPRO/lumina/issues"
+  },
+  "keywords": [
+    "image-editor",
+    "photoshop",
+    "psd",
+    "psb",
+    "layered-psd",
+    "icc",
+    "color-management",
+    "canvas",
+    "electron",
+    "image-processing",
+    "tiff",
+    "webp",
+    "qoi"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "web": "node scripts/serve.js",
+    "test": "node --test test/",
+    "test:unit": "node --test test/*.test.js",
+    "test:browser": "node --test test/browser.e2e.js",
+    "demo": "node cli/demo.js",
+    "bench": "node scripts/bench.js",
+    "screenshot": "node scripts/screenshot.mjs",
+    "sample": "python3 scripts/make-sample-artwork.py && node scripts/make-sample-psd.mjs",
+    "verify:psd": "node tools/verify-psd.mjs",
+    "verify:corpus": "node tools/verify-corpus.mjs",
+    "verify:corpus:download": "node tools/verify-corpus.mjs --download",
+    "start": "electron .",
+    "pack": "electron-builder --dir",
+    "dist:linux": "electron-builder --linux AppImage deb tar.gz --publish never",
+    "dist:mac": "electron-builder --mac dmg zip --publish never",
+    "dist:win": "electron-builder --win portable nsis --publish never",
+    "dist:all": "electron-builder --linux --mac --win --publish never"
+  },
+  "devDependencies": {
+    "electron": "^41.7.1",
+    "electron-builder": "^26.15.3",
+    "pngjs": "^7.0.0",
+    "puppeteer": "^24.0.0"
+  },
+  "build": {
+    "appId": "ir.lumina.editor",
+    "productName": "Lumina",
+    "copyright": "Copyright © 2026 ZALPRO (ZalNET)",
+    "asar": true,
+    "files": [
+      "ui/**/*",
+      "src/**/*",
+      "electron/**/*",
+      "package.json",
+      "!**/*.map"
+    ],
+    "directories": {
+      "output": "release",
+      "buildResources": "electron"
+    },
+    "icon": "electron/icon.png",
+    "linux": {
+      "category": "Graphics",
+      "synopsis": "Fast layered image editor with a from-scratch PSD engine",
+      "description": "Lumina is a fast, dependency-light image editor with native PSD read/write, ICC colour management, non-destructive adjustment layers and tile-based compositing.",
+      "target": [
+        "AppImage",
+        "deb",
+        "tar.gz"
+      ],
+      "maintainer": "ZALPRO (ZalNET) <zalpro@users.noreply.github.com>",
+      "executableName": "lumina",
+      "artifactName": "${productName}-${version}-linux-${arch}.${ext}",
+      "desktopName": "lumina.desktop",
+      "syncDesktopName": true
+    },
+    "mac": {
+      "category": "public.app-category.graphics-design",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ],
+      "darkModeSupport": true,
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "electron/entitlements.mac.plist",
+      "entitlementsInherit": "electron/entitlements.mac.plist"
+    },
+    "dmg": {
+      "artifactName": "${productName}-${version}-mac-${arch}.${ext}"
+    },
+    "win": {
+      "icon": "electron/icon.png",
+      "target": [
+        "portable",
+        "nsis"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "${productName}-Setup-${version}-win-${arch}.${ext}"
+    },
+    "portable": {
+      "artifactName": "${productName}-${version}-win-${arch}-portable.${ext}"
+    },
+    "appImage": {
+      "artifactName": "${productName}-${version}-linux-${arch}.${ext}"
+    },
+    "deb": {
+      "artifactName": "${productName}-${version}-linux-${arch}.${ext}"
+    }
+  }
+}

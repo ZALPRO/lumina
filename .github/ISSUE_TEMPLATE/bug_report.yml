@@ -1,0 +1,98 @@
+name: 🐛 Bug report
+description: Something behaves incorrectly (crash, wrong pixels, wrong file output)
+title: "[Bug] "
+labels: ["bug", "needs triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report! Two things make bugs in this project much faster to fix:
+        **the exact file that reproduces it**, and **the command that shows it**.
+        If the bug involves PSD files, the corpus output below is the single most useful attachment.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before you file
+      options:
+        - label: I searched existing issues and this is not a duplicate
+          required: true
+        - label: I can reproduce this on the latest `main`
+          required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - PSD / PSB read (opening a file)
+        - PSD write (export, saving, layered output)
+        - Colour management / ICC / CMYK
+        - UI (canvas, panels, tools, shortcuts)
+        - Desktop app (Electron, packaging, install)
+        - Web build / server
+        - Tests / verification tooling
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Where does it happen?
+      options:
+        - Linux
+        - macOS (Apple Silicon)
+        - macOS (Intel)
+        - Windows
+        - Browser only (npm run web)
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version / commit
+      description: Release tag, or the output of `git rev-parse --short HEAD`
+      placeholder: v1.0.0 / 4f2a9c1
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: Also say what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. npm run web
+        2. Open the attached file
+        3. Export as layered PSD with ZIP compression
+        4. Open the result in Photoshop → the bottom rows are garbage
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: |
+        Paste command output — for example:
+        `node tools/verify-corpus.mjs --download`, `npm test`, a console error, a screenshot.
+      render: shell
+    validations:
+      required: false
+  - type: textarea
+    id: files
+    attributes:
+      label: Sample files
+      description: Drag a (stripped-down) file that reproduces the problem into this box, or link to it.
+    validations:
+      required: false
+  - type: input
+    id: node
+    attributes:
+      label: Node version
+      description: Output of `node -v`
+      placeholder: v22.11.0
+    validations:
+      required: false
