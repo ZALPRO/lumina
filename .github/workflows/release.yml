@@ -47,16 +47,32 @@ jobs:
         run: npm test
 
       - name: Build packages
-        run: ${{ matrix.command }}
+        shell: bash
+        # Signing is optional. Secrets are only exported when they actually exist:
+        # an *empty* CSC_LINK/CSC_KEY_PASSWORD still switches electron-builder into
+        # signing mode and makes the build fail with "empty password will be used".
+        run: |
+          set -euo pipefail
+          export CSC_IDENTITY_AUTO_DISCOVERY=false
+          if [ -n "${SECRET_CSC_LINK:-}" ]; then
+            echo "code signing enabled"
+            export CSC_LINK="$SECRET_CSC_LINK"
+            export CSC_KEY_PASSWORD="${SECRET_CSC_KEY_PASSWORD:-}"
+          else
+            echo "building unsigned artifacts"
+          fi
+          if [ -n "${SECRET_APPLE_ID:-}" ]; then
+            export APPLE_ID="$SECRET_APPLE_ID"
+            export APPLE_APP_SPECIFIC_PASSWORD="${SECRET_APPLE_APP_PASSWORD:-}"
+            export APPLE_TEAM_ID="${SECRET_APPLE_TEAM_ID:-}"
+          fi
+          ${{ matrix.command }}
         env:
-          # Optional signing: set these repository secrets if you own certificates.
-          CSC_LINK: ${{ secrets.CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          # Builds stay unsigned when no secrets are configured.
-          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+          SECRET_CSC_LINK: ${{ secrets.CSC_LINK }}
+          SECRET_CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          SECRET_APPLE_ID: ${{ secrets.APPLE_ID }}
+          SECRET_APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          SECRET_APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
 
       - name: List artifacts
         shell: bash
